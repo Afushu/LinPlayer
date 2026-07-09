@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/emby_api.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/sources/anirss_backend.dart';
+import '../../../core/sources/feiniu_backend.dart';
 import '../../../core/sources/openlist_backend.dart';
 import '../../../core/sources/source_http.dart';
 import '../../../core/sources/source_kind.dart';
@@ -280,6 +281,7 @@ class _ServerListScreenState extends ConsumerState<ServerListScreen> {
         _showQuarkRelogin(context, ref, server);
       case SourceKind.openlist:
       case SourceKind.anirss:
+      case SourceKind.feiniu:
         _showSourceCredRelogin(context, ref, server);
       case SourceKind.emby:
         _showReloginDialog(context, ref, server);
@@ -330,13 +332,18 @@ class _ServerListScreenState extends ConsumerState<ServerListScreen> {
     final passCtrl = TextEditingController();
     var loading = false;
     String? error;
-    final isOpenList = server.sourceKind == SourceKind.openlist;
+    final kind = server.sourceKind;
+    final label = switch (kind) {
+      SourceKind.openlist => 'OpenList',
+      SourceKind.feiniu => '飞牛影视',
+      _ => 'Ani-rss',
+    };
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(isOpenList ? '重新登录 OpenList' : '重新登录 Ani-rss'),
+          title: Text('重新登录 $label'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -382,9 +389,13 @@ class _ServerListScreenState extends ConsumerState<ServerListScreen> {
                         final base = normalizeBaseUrl(urlCtrl.text.trim());
                         final user = userCtrl.text.trim();
                         final pass = passCtrl.text;
-                        final token = isOpenList
-                            ? await OpenListBackend.login(base, user, pass)
-                            : await AniRssBackend.login(base, user, pass);
+                        final token = switch (kind) {
+                          SourceKind.openlist =>
+                            await OpenListBackend.login(base, user, pass),
+                          SourceKind.feiniu =>
+                            await FeiniuBackend.login(base, user, pass),
+                          _ => await AniRssBackend.login(base, user, pass),
+                        };
                         final updated = server.copyWith(
                           baseUrl: base,
                           username: user,

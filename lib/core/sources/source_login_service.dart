@@ -2,6 +2,7 @@ import 'package:uuid/uuid.dart';
 
 import '../providers/server_providers.dart';
 import 'anirss_backend.dart';
+import 'feiniu_backend.dart';
 import 'media_source_backend.dart';
 import 'openlist_backend.dart';
 import 'quark_backend.dart';
@@ -72,6 +73,27 @@ class SourceLoginService {
       password: password,
       authToken: token,
       sourceKind: SourceKind.anirss,
+    );
+  }
+
+  /// 飞牛影视账密登录。
+  static Future<ServerConfig> loginFeiniu({
+    required String name,
+    required String baseUrl,
+    required String username,
+    required String password,
+  }) async {
+    final base = normalizeBaseUrl(baseUrl);
+    final token = await FeiniuBackend.login(base, username, password);
+    final host = Uri.tryParse(base)?.host ?? base;
+    return ServerConfig(
+      id: _uuid.v4(),
+      name: name.trim().isEmpty ? host : name.trim(),
+      baseUrl: base,
+      username: username.trim(),
+      password: password,
+      authToken: token,
+      sourceKind: SourceKind.feiniu,
     );
   }
 }

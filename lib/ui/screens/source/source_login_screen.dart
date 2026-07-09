@@ -103,6 +103,13 @@ class _SourceLoginScreenState extends ConsumerState<SourceLoginScreen> {
           username: _userCtrl.text,
           password: _passCtrl.text,
         );
+      case SourceKind.feiniu:
+        return SourceLoginService.loginFeiniu(
+          name: _nameCtrl.text,
+          baseUrl: _urlCtrl.text,
+          username: _userCtrl.text,
+          password: _passCtrl.text,
+        );
       case SourceKind.quark:
         return SourceLoginService.loginQuarkCookie(
           name: _nameCtrl.text,

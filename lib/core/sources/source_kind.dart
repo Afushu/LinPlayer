@@ -5,7 +5,7 @@
 ///
 /// 单独成文件，避免 [ServerConfig]（server_providers.dart）与
 /// media_source_backend.dart 之间的循环 import。
-enum SourceKind { emby, openlist, quark, anirss }
+enum SourceKind { emby, openlist, quark, anirss, feiniu }
 
 SourceKind sourceKindFromName(String? name) {
   switch (name) {
@@ -15,6 +15,8 @@ SourceKind sourceKindFromName(String? name) {
       return SourceKind.quark;
     case 'anirss':
       return SourceKind.anirss;
+    case 'feiniu':
+      return SourceKind.feiniu;
     case 'emby':
     default:
       return SourceKind.emby;

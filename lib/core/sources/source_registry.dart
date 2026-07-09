@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'anirss_backend.dart';
+import 'feiniu_backend.dart';
 import 'media_source_backend.dart';
 import 'openlist_backend.dart';
 import 'quark_backend.dart';
@@ -78,6 +79,15 @@ const List<SourceTypeDescriptor> kSourceTypes = [
     loginMethods: [SourceLoginMethod.password],
     keywords: ['anirss', 'ani-rss', '追番', '番剧', 'rss'],
   ),
+  SourceTypeDescriptor(
+    kind: SourceKind.feiniu,
+    name: '飞牛影视',
+    subtitle: 'fnOS 影视媒体库，账密登录浏览并在线播放',
+    icon: Icons.movie_filter_rounded,
+    accent: Color(0xFF00B4D8),
+    loginMethods: [SourceLoginMethod.password],
+    keywords: ['feiniu', '飞牛', 'fnos', 'trimemedia', '影视', 'fn'],
+  ),
 ];
 
 SourceTypeDescriptor? sourceTypeOf(SourceKind kind) {
@@ -99,6 +109,8 @@ MediaSourceBackend mediaSourceBackendFor(SourceKind kind) {
         return AniRssBackend();
       case SourceKind.quark:
         return QuarkBackend();
+      case SourceKind.feiniu:
+        return FeiniuBackend();
       case SourceKind.emby:
         throw UnimplementedError('源 $kind 尚未接入文件浏览后端');
     }

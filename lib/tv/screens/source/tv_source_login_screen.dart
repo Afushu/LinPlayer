@@ -100,6 +100,13 @@ class _TvSourceLoginScreenState extends ConsumerState<TvSourceLoginScreen> {
           username: _userController.text,
           password: _passController.text,
         );
+      case SourceKind.feiniu:
+        return SourceLoginService.loginFeiniu(
+          name: _nameController.text,
+          baseUrl: _urlController.text,
+          username: _userController.text,
+          password: _passController.text,
+        );
       case SourceKind.quark:
         return SourceLoginService.loginQuarkCookie(
           name: _nameController.text,
