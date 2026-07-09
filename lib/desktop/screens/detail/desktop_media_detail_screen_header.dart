@@ -820,6 +820,12 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
         if (!isSeries) ...[
           _buildMediaSourceSelectors(scale),
           SizedBox(height: 24 * scale),
+          // 其他服务器版本（聚合栏）
+          _AggregationSection(
+            itemId: widget.itemId,
+            primaryColor: widget.primaryColor,
+            scaleFactor: scale,
+          ),
         ],
 
         // 分集区域（仅剧集）

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../../core/providers/episode_aggregation_provider.dart';
 import '../../../core/services/cast_service.dart';
 import '../../../core/services/preload_service.dart';
 import '../../../core/theme/app_motion.dart';
@@ -292,6 +293,11 @@ class _EpisodeDetailScreenState extends ConsumerState<EpisodeDetailScreen> {
                   child: Text('加载播放信息失败'),
                 ),
               ),
+            ),
+
+            // 其他服务器版本（聚合栏）
+            SliverToBoxAdapter(
+              child: _AggregationBar(itemId: widget.episodeId),
             ),
 
             // 已观看进度（播放按钮上方）
@@ -1043,6 +1049,107 @@ class _PersonCard extends ConsumerWidget {
 }
 
 /// 版本信息区块
+/// 其他服务器版本聚合栏：把同一集/同一部电影在其它已登录 Emby 服务器上的所有
+/// 版本平铺展示，正则命中者高亮并排前。无匹配/加载中静默不占位。
+class _AggregationBar extends ConsumerWidget {
+  final String itemId;
+
+  const _AggregationBar({required this.itemId});
+
+  static const _accent = Color(0xFF5B8DEF);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(episodeAggregationProvider(itemId));
+    final versions = async.valueOrNull ?? const <AggregatedVersion>[];
+    if (versions.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: '其他服务器版本'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: versions.map((v) {
+              final hit = v.matchesRegex;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                color: hit ? _accent.withValues(alpha: 0.08) : null,
+                shape: hit
+                    ? RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: _accent, width: 1.2),
+                      )
+                    : null,
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => playAggregatedVersion(ref, context, v),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(
+                      children: [
+                        Icon(Icons.dns_outlined,
+                            size: 18,
+                            color: hit
+                                ? _accent
+                                : Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      v.server.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13.5),
+                                    ),
+                                  ),
+                                  if (hit) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(Icons.star,
+                                        size: 13, color: _accent),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                aggregatedVersionLabel(v.source),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.play_circle_outline,
+                            size: 22, color: _accent),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _VersionInfoSection extends StatelessWidget {
   final PlaybackInfo info;
 

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../../core/providers/episode_aggregation_provider.dart';
 import '../../../core/services/preload_service.dart';
 import '../../../ui/utils/media_helpers.dart';
 import '../../../ui/widgets/common/media_widgets.dart';
@@ -95,6 +96,8 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildActionButtons(item, m),
+                // 其他服务器版本（聚合栏）
+                _buildAggregationBar(item, m),
                 // 选集列表放在「简介」之上，方便遥控器直接选集切换。
                 if (isSeries) ...[
                   SizedBox(height: m.spacingLg),
@@ -355,6 +358,113 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// 其他服务器版本聚合栏：同一集/同一部电影在其它已登录 Emby 服务器上的所有版本，
+  /// 正则命中者描边高亮并排前。无匹配/加载中静默不占位。焦点选中即切服并播。
+  Widget _buildAggregationBar(MediaItem item, TvMetrics m) {
+    final versions =
+        ref.watch(episodeAggregationProvider(item.id)).valueOrNull ??
+            const <AggregatedVersion>[];
+    if (versions.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: m.spacingLg),
+        Text(
+          '其他服务器版本',
+          style: TextStyle(
+            fontSize: m.fontSizeLg,
+            color: TvDesignTokens.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: m.spacingSm),
+        SizedBox(
+          height: m.s(96),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: versions.length,
+            separatorBuilder: (_, __) => SizedBox(width: m.spacingMd),
+            itemBuilder: (context, index) {
+              final v = versions[index];
+              return TvFocusable(
+                onSelect: () => playAggregatedVersion(ref, context, v, isTv: true),
+                child: _buildAggregationCard(v, m),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAggregationCard(AggregatedVersion v, TvMetrics m) {
+    final hit = v.matchesRegex;
+    return Container(
+      width: m.s(320),
+      padding: EdgeInsets.symmetric(
+          horizontal: m.spacingMd, vertical: m.spacingSm),
+      decoration: BoxDecoration(
+        color: TvDesignTokens.surface,
+        borderRadius: BorderRadius.circular(m.posterRadius),
+        border: Border.all(
+          color: hit ? TvDesignTokens.brand : TvDesignTokens.surfaceElevated,
+          width: hit ? m.s(2) : m.s(1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.dns_outlined,
+              size: m.s(26),
+              color: hit ? TvDesignTokens.brand : TvDesignTokens.textSecondary),
+          SizedBox(width: m.spacingSm),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        v.server.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: m.fontSizeSm,
+                          color: TvDesignTokens.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (hit) ...[
+                      SizedBox(width: m.spacingXs),
+                      Icon(Icons.star,
+                          size: m.s(16), color: TvDesignTokens.brand),
+                    ],
+                  ],
+                ),
+                SizedBox(height: m.spacingXs),
+                Text(
+                  aggregatedVersionLabel(v.source),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: m.fontSizeXs,
+                    color: TvDesignTokens.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: m.spacingSm),
+          Icon(Icons.play_circle_outline,
+              size: m.s(26), color: TvDesignTokens.brand),
+        ],
+      ),
     );
   }
 

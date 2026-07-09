@@ -242,6 +242,16 @@ abstract class MediaApi {
   /// 获取人物参演
   /// GET /Persons/{Name}/Items
   Future<List<Person>> getPersonItems(String personName);
+
+  /// 按 Provider Id（tmdb/imdb/tvdb 等）精确反查条目——跨服务器聚合「同一内容」用。
+  /// GET /Users/{UserId}/Items?AnyProviderIdEquals=tmdb.123,imdb.tt456
+  /// 传入 {provider: id}，服务端按「任一命中(OR)」匹配；可选按类型(Movie/Series)过滤。
+  /// 服务器不支持该参数时返回空，调用方回退到标题搜索。
+  Future<List<MediaItem>> findItemsByProviderIds(
+    Map<String, String> providerIds, {
+    String? includeItemTypes,
+    int limit = 10,
+  });
 }
 
 class MediaItem {

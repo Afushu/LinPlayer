@@ -810,6 +810,37 @@ class EmbyMediaApi implements MediaApi {
         .map((e) => _parsePersonFromItem(e as Map<String, dynamic>))
         .toList();
   }
+
+  @override
+  Future<List<MediaItem>> findItemsByProviderIds(
+    Map<String, String> providerIds, {
+    String? includeItemTypes,
+    int limit = 10,
+  }) async {
+    final anyEquals = providerIds.entries
+        .where((e) => e.key.trim().isNotEmpty && e.value.trim().isNotEmpty)
+        .map((e) => '${e.key.trim().toLowerCase()}.${e.value.trim()}')
+        .join(',');
+    if (anyEquals.isEmpty) return const <MediaItem>[];
+    final uid = _requireUserId(_client);
+    final params = <String, dynamic>{
+      'UserId': uid,
+      'Recursive': true,
+      'AnyProviderIdEquals': anyEquals,
+      'Limit': limit,
+      'Fields': _detailFields,
+    };
+    if (includeItemTypes != null && includeItemTypes.isNotEmpty) {
+      params['IncludeItemTypes'] = includeItemTypes;
+    }
+    final resp = await _client.get('/Users/$uid/Items', queryParameters: params);
+    final items =
+        (resp.data as Map<String, dynamic>)['Items'] as List<dynamic>? ??
+            const <dynamic>[];
+    return items
+        .map((e) => _parseMediaItem(e as Map<String, dynamic>))
+        .toList();
+  }
 }
 
 // ==================== Search ====================

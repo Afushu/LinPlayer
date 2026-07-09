@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/providers/episode_aggregation_provider.dart';
 import '../../../core/services/font_service.dart';
 import '../../../core/providers/sync_providers.dart';
 import '../../../core/services/sync/sync_models.dart';
@@ -41,6 +42,7 @@ import '../server/server_list_screen.dart';
 import 'config_migration_screen.dart';
 import 'wallpaper_crop_screen.dart';
 
+part 'settings_aggregation.dart';
 part 'settings_backup_restore.dart';
 part 'settings_danmaku.dart';
 part 'settings_general.dart';

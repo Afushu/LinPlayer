@@ -335,4 +335,13 @@ class _FakeMediaApi implements MediaApi {
   Future<List<Person>> getPersonItems(String personName) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<MediaItem>> findItemsByProviderIds(
+    Map<String, String> providerIds, {
+    String? includeItemTypes,
+    int limit = 10,
+  }) {
+    throw UnimplementedError();
+  }
 }

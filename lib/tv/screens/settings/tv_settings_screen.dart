@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../core/app_identity.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/providers/episode_aggregation_provider.dart';
 import '../../../core/providers/update_providers.dart';
 import '../../../core/services/app_logger.dart';
 import '../../../core/services/font_service.dart';
@@ -224,6 +225,7 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
             !preloadEnabled,
       ),
       ..._mtlItems(m),
+      ..._aggregationItems(m),
       _toggleItem(
         m,
         title: 'STRM 直链播放',
@@ -275,6 +277,25 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         onSubmit: (v) => _saveRegexPref(preferredAudioRegexProvider, v),
       ),
     ]);
+  }
+
+  /// 跨服聚合设置项：每个 Emby 服务器是否参与详情页「其他服务器版本」聚合。
+  /// 开=允许，关=不允许（默认允许）。
+  List<Widget> _aggregationItems(TvMetrics m) {
+    ref.watch(aggregationDisabledServersProvider); // 状态变更时重建
+    final notifier = ref.read(aggregationDisabledServersProvider.notifier);
+    final servers =
+        ref.watch(serverListProvider).where((s) => !s.isFileBrowse).toList();
+    return [
+      for (final s in servers)
+        _toggleItem(
+          m,
+          title: '参与聚合：${s.name}',
+          subtitle: notifier.isEnabled(s.id) ? '已允许' : '不参与',
+          value: notifier.isEnabled(s.id),
+          onToggle: () => notifier.setEnabled(s.id, !notifier.isEnabled(s.id)),
+        ),
+    ];
   }
 
   /// 多线程加载设置项：并发线程数 + 每个服务器的允许开关（按服务器白名单）。

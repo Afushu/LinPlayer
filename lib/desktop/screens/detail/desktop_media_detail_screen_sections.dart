@@ -328,6 +328,159 @@ class _SectionTitle extends StatelessWidget {
 }
 
 // ============================================================================
+// 其他服务器版本（聚合栏）
+// ============================================================================
+
+/// 把同一集/同一部电影在其它已登录 Emby 服务器上的所有版本平铺成卡片，正则命中者
+/// 高亮并排前（排序在 provider 内完成）。无匹配/加载中静默不占位。点卡片即切服并播。
+class _AggregationSection extends ConsumerWidget {
+  final String itemId;
+  final Color primaryColor;
+  final double scaleFactor;
+
+  const _AggregationSection({
+    required this.itemId,
+    required this.primaryColor,
+    required this.scaleFactor,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scale = scaleFactor;
+    final versions =
+        ref.watch(episodeAggregationProvider(itemId)).valueOrNull ??
+            const <AggregatedVersion>[];
+    if (versions.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(
+          title: '其他服务器版本',
+          scaleFactor: scale,
+          primaryColor: primaryColor,
+        ),
+        SizedBox(height: 14 * scale),
+        Wrap(
+          spacing: 12 * scale,
+          runSpacing: 12 * scale,
+          children: versions
+              .map((v) => _AggregationCard(
+                    version: v,
+                    primaryColor: primaryColor,
+                    scaleFactor: scale,
+                    onTap: () => playAggregatedVersion(ref, context, v),
+                  ))
+              .toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _AggregationCard extends StatefulWidget {
+  final AggregatedVersion version;
+  final Color primaryColor;
+  final double scaleFactor;
+  final VoidCallback onTap;
+
+  const _AggregationCard({
+    required this.version,
+    required this.primaryColor,
+    required this.scaleFactor,
+    required this.onTap,
+  });
+
+  @override
+  State<_AggregationCard> createState() => _AggregationCardState();
+}
+
+class _AggregationCardState extends State<_AggregationCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = widget.scaleFactor;
+    final v = widget.version;
+    final hit = v.matchesRegex;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 260 * scale,
+          padding: EdgeInsets.symmetric(
+              horizontal: 12 * scale, vertical: 11 * scale),
+          decoration: BoxDecoration(
+            color: _detailCardSurface(context, hovered: _hovered, selected: hit),
+            borderRadius: BorderRadius.circular(12 * scale),
+            border: Border.all(
+              color: hit
+                  ? widget.primaryColor
+                  : _detailBorder(context, emphasis: _hovered ? 0.6 : 0.0),
+              width: (hit ? 1.4 : 1.0) * scale,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.dns_outlined,
+                  size: 18 * scale,
+                  color:
+                      hit ? widget.primaryColor : _detailSecondaryText(context)),
+              SizedBox(width: 10 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            v.server.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13.5 * scale,
+                              fontWeight: FontWeight.w600,
+                              color: _detailPrimaryText(context),
+                            ),
+                          ),
+                        ),
+                        if (hit) ...[
+                          SizedBox(width: 6 * scale),
+                          Icon(Icons.star,
+                              size: 13 * scale, color: widget.primaryColor),
+                        ],
+                      ],
+                    ),
+                    SizedBox(height: 2 * scale),
+                    Text(
+                      aggregatedVersionLabel(v.source),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5 * scale,
+                        color: _detailSecondaryText(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 8 * scale),
+              Icon(Icons.play_circle_outline,
+                  size: 22 * scale, color: widget.primaryColor),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
 // 分集区域
 // ============================================================================
 

@@ -72,6 +72,12 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => _showResumeSync(context),
           ),
           _SettingsCard(
+            icon: Icons.layers,
+            title: '跨服聚合',
+            subtitle: '选择哪些服务器参与详情页「其他服务器版本」聚合',
+            onTap: () => _showAggregation(context),
+          ),
+          _SettingsCard(
             icon: Icons.sync,
             title: '同步服务',
             subtitle: 'Trakt、Bangumi 观看记录同步',
@@ -147,6 +153,9 @@ class SettingsScreen extends ConsumerWidget {
 
   void _showResumeSync(BuildContext context) =>
       _openSubPage(context, const ResumeSyncScreen());
+
+  void _showAggregation(BuildContext context) =>
+      _openSubPage(context, const AggregationSettingsScreen());
 
   void _showSyncSettings(BuildContext context) =>
       _openSubPage(context, const SyncSettingsScreen());

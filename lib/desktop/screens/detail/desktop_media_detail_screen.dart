@@ -12,6 +12,7 @@ import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/download_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../../core/providers/episode_aggregation_provider.dart';
 import '../../../core/services/download/download_helper.dart';
 import '../../../core/services/preload_service.dart';
 import '../../../core/theme/app_colors.dart';
