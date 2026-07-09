@@ -135,6 +135,10 @@ class _Session {
   int _serveChunk = 0; // 下一个要供给的分段
   int _fetchCursor = 0; // 下一个要分配给 worker 的分段
   int _generation = 0; // seek/切换时自增，作废在途结果
+  // seek 时取消在途上游下载：不取消的话 worker 得先把 seek 前超前预取的旧 4MB 块下载完
+  // （弱网跨境最坏熬到 30s receiveTimeout）才能转头拉新位置 → seek/续播卡十几秒。
+  // 每次 _reset 作废旧 token 换新，让在途请求立刻 abort、worker 秒转 seek 目标块。
+  CancelToken _fetchToken = CancelToken();
   bool _closed = false;
   Completer<void> _window = Completer<void>(); // 窗口/进度变化信号
 
@@ -202,6 +206,7 @@ class _Session {
   void dispose() {
     _closed = true;
     _generation++;
+    if (!_fetchToken.isCancelled) _fetchToken.cancel('disposed');
     _signalWindow();
     for (final c in _pending.values) {
       if (!c.isCompleted) c.complete(null);
@@ -221,6 +226,9 @@ class _Session {
   // 把供给/取数游标重定位到字节 [byteStart]（新请求 = 播放器 seek 或首次连接）。
   void _reset(int byteStart) {
     _generation++;
+    // 立刻 abort seek 前在途的旧 4MB 下载，worker 无需排空即可转拉新位置。
+    if (!_fetchToken.isCancelled) _fetchToken.cancel('seek-reset');
+    _fetchToken = CancelToken();
     _serveChunk = byteStart ~/ chunkSize;
     _fetchCursor = _serveChunk;
     for (final c in _pending.values) {
@@ -260,7 +268,10 @@ class _Session {
         data = await _fetchChunk(c);
       } catch (e) {
         data = null;
-        _log.w('Prefetch', '段 $c 拉取失败: $e');
+        // seek/dispose 主动取消不算失败，别刷 warn。
+        if (!(e is DioException && CancelToken.isCancel(e))) {
+          _log.w('Prefetch', '段 $c 拉取失败: $e');
+        }
       }
       if (_closed || gen != _generation) {
         if (!comp.isCompleted) comp.complete(null); // 作废，唤醒等待者
@@ -280,6 +291,7 @@ class _Session {
         final resp = await _dio.get<List<int>>(
           _upstreamUrl,
           options: Options(headers: {'Range': 'bytes=$start-$end'}),
+          cancelToken: _fetchToken,
         );
         final body = resp.data;
         if (body != null && body.isNotEmpty) {
@@ -292,6 +304,8 @@ class _Session {
         throw DioException(
             requestOptions: resp.requestOptions, error: 'empty body');
       } on DioException catch (e) {
+        // seek/dispose 取消了本段 → 该段已作废，别重试（否则用新 token 又白拉一遍旧段）。
+        if (CancelToken.isCancel(e)) rethrow;
         last = e;
         // 服务端返回 4xx/5xx = 上游拒绝该 URL（前后端分离的短效签名链常见 6 分钟到期），
         // 与纯网络抖动不同：重发同一过期 URL 必然再失败。此时先重签换新地址，下一次
