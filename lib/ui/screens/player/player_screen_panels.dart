@@ -477,6 +477,10 @@ class _SubtitleSettingsContentState
         final playerSubtitleTracks = subtitles.isEmpty
             ? _playerTracksOfType(const ['text', 'bitmap'])
             : const <Map<String, dynamic>>[];
+        // 次字幕只能是文本轨（位图不能做副字幕）；strm/网盘 Emby 流为空时同样回退 mpv 轨，
+        // 否则次字幕列表恒为「无可用」→ 次字幕位置滑杆永远不出现。
+        final secondaryPlayerTracks =
+            playerSubtitleTracks.where((t) => t['type'] == 'text').toList();
 
         return _SettingsSection(
           children: [
@@ -531,13 +535,14 @@ class _SubtitleSettingsContentState
             PanelOptionTile(
               label: '关闭',
               selected: selectedSecondaryIndex == null,
-              onTap: () => ref
-                  .read(secondarySubtitleTrackProvider.notifier)
-                  .state = null,
+              onTap: () {
+                ref.read(secondarySubtitleTrackProvider.notifier).state = null;
+                // strm/网盘回退路径下次字幕经播放器直接选中、未走 provider，故显式取消。
+                _PlayerScreenState.activePlayerService
+                    ?.deselectSecondarySubtitle();
+              },
             ),
-            if (subtitles.isEmpty)
-              const _PanelEmpty(label: '无可用次字幕')
-            else
+            if (subtitles.isNotEmpty)
               ...subtitles.map((stream) => PanelOptionTile(
                     label: nameMap[stream.index] ??
                         stream.readableLabel(siblings: subtitles),
@@ -545,9 +550,23 @@ class _SubtitleSettingsContentState
                     onTap: () => ref
                         .read(secondarySubtitleTrackProvider.notifier)
                         .state = stream.index,
-                  )),
-            // 次字幕位置（libmpv 0.41+ secondary-sub-pos）——仅选了次字幕时可调。
-            if (selectedSecondaryIndex != null)
+                  ))
+            else if (secondaryPlayerTracks.isNotEmpty)
+              // strm/网盘：Emby 无流信息 → 用 mpv 文本轨直接按轨道 id 选次字幕。
+              ...secondaryPlayerTracks.map((t) => PanelOptionTile(
+                    label: _playerTrackLabel(t),
+                    subtitle: (t['codec']?.toString().isNotEmpty == true)
+                        ? '编码: ${t['codec']}'
+                        : null,
+                    selected: false,
+                    onTap: () => _PlayerScreenState.activePlayerService
+                        ?.selectSecondarySubtitleTrack(t['id'].toString()),
+                  ))
+            else
+              const _PanelEmpty(label: '无可用次字幕'),
+            // 次字幕位置（libmpv 0.41+ secondary-sub-pos）——有次字幕可选时即可调（含 strm 回退）。
+            if (selectedSecondaryIndex != null ||
+                (subtitles.isEmpty && secondaryPlayerTracks.isNotEmpty))
               PanelSliderRow(
                 label: '次字幕位置',
                 value: secondarySubtitlePosition.clamp(0.0, 1.0),

@@ -536,38 +536,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       DeviceOrientation.landscapeRight,
     ]);
 
-    // 加载字幕（内封/外挂）—— 两个内核都支持
+    // 轨道相关的挑轨（字幕/音频/次字幕）挪到后台，不阻塞起播与其它初始化：libmpv 0.41
+    // 对大流 demux 较慢，等内封轨道就绪可能要十几秒，绝不能卡在这条主初始化链上，
+    // 否则表现为「视频加载变慢 + 内封字幕迟迟不出/选轨崩溃」。
     if (mediaSource != null) {
-      await _waitForTracksReady();
-      await _loadSubtitles(item, mediaSource);
-    }
-
-    final audioStreams =
-        mediaSource?.mediaStreams.where((stream) => stream.isAudio).toList() ??
-            const <MediaStream>[];
-    var selectedAudioIndex = ref.read(audioTrackProvider);
-    // 「音频选择」正则：用户未手动选轨时，按正则自动挑选匹配的音频轨。
-    if (selectedAudioIndex == null && audioStreams.isNotEmpty) {
-      final audioMatch =
-          matchPreferredStream(audioStreams, ref.read(preferredAudioRegexProvider));
-      if (audioMatch != null) {
-        selectedAudioIndex = audioMatch.index;
-        ref.read(audioTrackProvider.notifier).state = audioMatch.index;
-      }
-    }
-    if (selectedAudioIndex != null) {
-      await _applyInitialAudioTrack(audioStreams, selectedAudioIndex);
-    }
-
-    final selectedSubtitleIndex = ref.read(subtitleTrackProvider);
-    if (selectedSubtitleIndex != null) {
-      await _onSubtitleTrackChanged(null, selectedSubtitleIndex);
-    }
-
-    final selectedSecondarySubtitleIndex =
-        ref.read(secondarySubtitleTrackProvider);
-    if (selectedSecondarySubtitleIndex != null) {
-      await _onSecondarySubtitleTrackChanged(selectedSecondarySubtitleIndex);
+      unawaited(_applyTrackSelections(item, mediaSource));
     }
 
     _playerService.setSubtitleSize(ref.read(subtitleSizeProvider));
@@ -651,8 +624,54 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     await _initializeSourcePlayer(sp, startPosition: pos);
   }
 
+  /// 后台挑轨：等内封轨道就绪（仅在有内封字幕时才等）后，依次应用字幕/音频/次字幕选择。
+  /// 从初始化主链拆出来，避免 0.41 的慢 demux 把起播后的 UI 初始化卡住十几秒，也让
+  /// 内封字幕在轨道就绪后可靠选中（[_waitForTracksReady] 现在不阻塞主链，可放心等久些）。
+  Future<void> _applyTrackSelections(
+      MediaItem item, MediaSource mediaSource) async {
+    final expectsInternalSub = mediaSource.mediaStreams
+        .any((s) => s.isSubtitle && !(s.isExternal ?? false));
+    if (expectsInternalSub) await _waitForTracksReady();
+    if (!mounted) return;
+
+    // 字幕（内封/外挂）：未手动选轨时按正则/首选语言自动挑，已选轨的实际选择在下方完成。
+    await _loadSubtitles(item, mediaSource);
+    if (!mounted) return;
+
+    // 音频：正则自动挑轨（用户未手动选时）。
+    final audioStreams =
+        mediaSource.mediaStreams.where((stream) => stream.isAudio).toList();
+    var selectedAudioIndex = ref.read(audioTrackProvider);
+    if (selectedAudioIndex == null && audioStreams.isNotEmpty) {
+      final audioMatch = matchPreferredStream(
+          audioStreams, ref.read(preferredAudioRegexProvider));
+      if (audioMatch != null) {
+        selectedAudioIndex = audioMatch.index;
+        ref.read(audioTrackProvider.notifier).state = audioMatch.index;
+      }
+    }
+    if (selectedAudioIndex != null) {
+      await _applyInitialAudioTrack(audioStreams, selectedAudioIndex);
+    }
+    if (!mounted) return;
+
+    final selectedSubtitleIndex = ref.read(subtitleTrackProvider);
+    if (selectedSubtitleIndex != null) {
+      await _onSubtitleTrackChanged(null, selectedSubtitleIndex);
+    }
+    if (!mounted) return;
+
+    final selectedSecondarySubtitleIndex =
+        ref.read(secondarySubtitleTrackProvider);
+    if (selectedSecondarySubtitleIndex != null) {
+      await _onSecondarySubtitleTrackChanged(selectedSecondarySubtitleIndex);
+    }
+  }
+
   Future<void> _waitForTracksReady() async {
-    for (int i = 0; i < 30; i++) {
+    // 现在跑在后台（不阻塞主初始化链），可放心等久些：0.41 大流 demux 可能十几秒才吐出
+    // 内封字幕轨。返回条件是「轨道已出现」，一旦就绪立即返回，不会白等满。
+    for (int i = 0; i < 100; i++) {
       final tracks = _playerService.tracksInfo;
       final subtitleTracks = tracks
           .where((t) =>
@@ -662,6 +681,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           .toList();
       if (subtitleTracks.isNotEmpty) return;
       await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
     }
     AppLogger().w('Player', '等待轨道就绪超时，继续加载');
   }

@@ -111,7 +111,13 @@ class PlayerSubtitleLoader {
                 .toList()
             : subtitleTracks;
 
-    if (candidates.isEmpty) return subtitleTracks.first['id']?.toString();
+    // 轨道尚未 demux 完（0.41 大流较慢）时 subtitleTracks 可能为空——不能 .first，
+    // 否则抛 "Bad state: No element" 让整个选轨中断（调用方须能容忍返回 null 再择机重试）。
+    if (candidates.isEmpty) {
+      return subtitleTracks.isEmpty
+          ? null
+          : subtitleTracks.first['id']?.toString();
+    }
 
     if (targetTitle != null && targetTitle.isNotEmpty) {
       for (final t in candidates) {

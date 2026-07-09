@@ -40,6 +40,47 @@ const Duration _kAggregationStartDelay = Duration(milliseconds: 1800);
 /// 让出关键起播带宽。超时则不再干等（避免预热异常时聚合永不出现）。
 const Duration _kMaxWarmWait = Duration(seconds: 6);
 
+/// 跨服并发上限：同时最多这么多台在飞。用户从详情页点「播放」后详情页仍挂在栈上、聚合
+/// 请求会与真正起播抢同一批服务器的连接/上行，故限流——但仍**按完成顺序逐台出**
+/// （[_boundedAsCompleted]），一台慢/掉线不阻塞其它台。
+const int _kServerConcurrency = 3;
+
+/// 有界并发地把 [tasks] 跑起来，按**完成顺序**吐结果（不等齐）：同时最多 [concurrency]
+/// 个在飞，空出一个槽就补下一个。既满足「哪台先返回先显示」，又不一次性打满移动端连接/
+/// 上行抢起播带宽。[tasks] 须自行吞掉异常（本流不产生 error 事件）。
+Stream<T> _boundedAsCompleted<T>(
+  List<Future<T> Function()> tasks,
+  int concurrency,
+) {
+  final controller = StreamController<T>();
+  var next = 0;
+  var active = 0;
+  var completed = 0;
+
+  void pump() {
+    while (active < concurrency && next < tasks.length) {
+      final task = tasks[next++];
+      active++;
+      task().then(controller.add).catchError((_) {}).whenComplete(() {
+        active--;
+        completed++;
+        if (completed == tasks.length) {
+          controller.close();
+        } else {
+          pump();
+        }
+      });
+    }
+  }
+
+  if (tasks.isEmpty) {
+    controller.close();
+  } else {
+    pump();
+  }
+  return controller.stream;
+}
+
 /// 被用户关闭「参与聚合」的服务器 id 集合（默认空 = 全部参与）。
 /// 存已关闭的一方：新加入的服务器不在集合里，即默认参与，符合「开=允许」。
 final aggregationDisabledServersProvider =
@@ -221,11 +262,12 @@ final episodeAggregationProvider = StreamProvider.autoDispose
     for (var i = 0; i < servers.length; i++) servers[i].id: i,
   };
 
-  // 全部服务器并发发起，哪台先匹配到就先 emit：Stream.fromFutures 按完成顺序吐结果，
-  // 一台慢/掉线不拖累其它台（versionsOf 内部已吞异常返回空，故无 error 事件）。
+  // 有界并发、按完成顺序逐台出：哪台先匹配到就先 emit，一台慢/掉线不拖累其它台，
+  // 同时最多 [_kServerConcurrency] 台在飞以免抢起播带宽（versionsOf 内部已吞异常）。
   final all = <AggregatedVersion>[];
   var emitted = false;
-  await for (final list in Stream.fromFutures(servers.map(versionsOf))) {
+  final tasks = servers.map((s) => () => versionsOf(s)).toList();
+  await for (final list in _boundedAsCompleted(tasks, _kServerConcurrency)) {
     if (disposed) return;
     if (list.isEmpty) continue;
     all.addAll(list);

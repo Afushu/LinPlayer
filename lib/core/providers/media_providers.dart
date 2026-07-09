@@ -380,17 +380,26 @@ class ServerMatchInfo {
 /// 复用 [aggregateSearchResultsProvider] 的并行 + 单台失败隔离思路，但以标题
 /// 参数化，且每台只保留一条最佳匹配（避免弹窗信息过载）。不解析分辨率/码率——
 /// 剧集要逐集拉流才知道，太贵且意义不大。
-final rankingCrossServerMatchProvider = FutureProvider.autoDispose
-    .family<List<ServerMatchInfo>, String>((ref, title) async {
+///
+/// **逐台增量**：StreamProvider + [Stream.fromFutures]，哪台先命中就先 emit，一台
+/// 慢/掉线不阻塞其它台（不再 `Future.wait` 等齐才出）。
+final rankingCrossServerMatchProvider = StreamProvider.autoDispose
+    .family<List<ServerMatchInfo>, String>((ref, title) async* {
   final query = title.trim();
-  if (query.isEmpty) return const <ServerMatchInfo>[];
+  if (query.isEmpty) {
+    yield const <ServerMatchInfo>[];
+    return;
+  }
 
   final servers = ref.watch(serverListProvider);
   final targets =
       servers.where((s) => (s.authToken ?? '').isNotEmpty).toList();
-  if (targets.isEmpty) return const <ServerMatchInfo>[];
+  if (targets.isEmpty) {
+    yield const <ServerMatchInfo>[];
+    return;
+  }
 
-  final results = await Future.wait(targets.map((server) async {
+  Future<ServerMatchInfo?> matchOne(ServerConfig server) async {
     final client = ref.read(serverApiClientProvider(server.id));
     if (client == null) return null;
     try {
@@ -421,10 +430,21 @@ final rankingCrossServerMatchProvider = FutureProvider.autoDispose
       AppLogger().w('RankingMatch', '服务器「${server.name}」搜索失败: $e');
       return null;
     }
-  }));
+  }
 
-  // 丢弃无命中的服务器，保留 serverListProvider 的顺序。
-  return results.whereType<ServerMatchInfo>().toList();
+  // 哪台先命中就先显示：按完成顺序累积，每次按 serverListProvider 原顺序重排后 emit。
+  final acc = <String, ServerMatchInfo>{};
+  var emitted = false;
+  await for (final r in Stream.fromFutures(targets.map(matchOne))) {
+    if (r == null) continue;
+    acc[r.serverName] = r;
+    emitted = true;
+    yield <ServerMatchInfo>[
+      for (final s in targets)
+        if (acc[s.name] != null) acc[s.name]!,
+    ];
+  }
+  if (!emitted) yield const <ServerMatchInfo>[];
 });
 
 /// 搜索结果（平铺）。聚合开关打开时跨所有服务器搜索并合并，否则只搜当前服务器。
