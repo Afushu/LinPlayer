@@ -593,10 +593,17 @@ class MpvPlayerAdapter implements PlayerAdapter {
       // 反复 create/dispose 播放器后 GL 上下文泄漏/损坏→第 N 次播放纹理不出帧→
       // 黑屏(音频不受影响)，老 macOS(12.x/Intel)尤甚。改用软件纹理 TextureSW
       // (CVPixelBuffer 拷贝，不用 GL 上下文)彻底免疫该泄漏；解码仍是硬解
-      // (videotoolbox-copy)，只是最终一帧上传走 CPU，代价可接受。其余平台不变。
+      // (videotoolbox-copy)，只是最终一帧上传走 CPU，代价可接受。
+      //
+      // Windows 同用软件纹理，但为的是另一个症状：弹选集/设置面板(showGeneralDialog
+      // push 路由)时 Flutter 重组图层，ANGLE 硬件纹理会瞬间黑帧→「画面闪一下」。
+      // 移动端 SurfaceTexture 缓存末帧故不闪。软件纹理由 Flutter 托管、末帧常驻，
+      // 重组图层不掉帧→消除闪现；代价同 macOS：4K 每帧 CPU 上传。若 4K 掉帧明显，
+      // 回退本行即可(仅去掉 isWindows)。解码仍是硬解(dxva2/d3d11)。
+      final softwareTexture = Platform.isMacOS || Platform.isWindows;
       _videoController = VideoController(
         _player!,
-        configuration: Platform.isMacOS
+        configuration: softwareTexture
             ? const VideoControllerConfiguration(
                 enableHardwareAcceleration: false)
             : const VideoControllerConfiguration(),
