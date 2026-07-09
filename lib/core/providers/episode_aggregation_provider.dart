@@ -21,6 +21,7 @@ import 'package:go_router/go_router.dart';
 
 import '../api/api_interfaces.dart';
 import '../services/app_logger.dart';
+import '../services/preload_service.dart';
 import '../services/watch_history/watch_history_matcher.dart'
     show extractProviderId, normalizeWatchHistoryText;
 import '../utils/track_preference.dart';
@@ -28,6 +29,17 @@ import 'app_preferences.dart';
 import 'media_providers.dart';
 import 'playback_providers.dart';
 import 'server_providers.dart';
+
+/// 聚合是**次要**任务，绝不能抢起播带宽。进详情页后延后一段再发网络请求：用户「开页
+/// 即点播」的常见流里，聚合根本还没开跑，MPV 起播独享带宽；只有停在详情页浏览时才加载。
+const Duration _kAggregationStartDelay = Duration(milliseconds: 1800);
+
+/// 起跑后若预热(PreloadService)仍在拉 32MB 头部，再等它空闲（最多这么久）才发聚合请求，
+/// 让出关键起播带宽。超时则不再干等（避免预热异常时聚合永不出现）。
+const Duration _kMaxWarmWait = Duration(seconds: 6);
+
+/// 跨服并发上限：聚合请求分批发，避免一次性对多台服务器发起请求打满移动端上行/连接。
+const int _kServerConcurrency = 3;
 
 /// 被用户关闭「参与聚合」的服务器 id 集合（默认空 = 全部参与）。
 /// 存已关闭的一方：新加入的服务器不在集合里，即默认参与，符合「开=允许」。
@@ -116,6 +128,19 @@ final episodeAggregationProvider = FutureProvider.autoDispose
   }).toList();
   if (servers.isEmpty) return const <AggregatedVersion>[];
 
+  // 让路给起播：先延后，再等预热空闲，之后才发聚合网络请求。离开详情页则中止。
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  await Future<void>.delayed(_kAggregationStartDelay);
+  if (disposed) return const <AggregatedVersion>[];
+  var waited = Duration.zero;
+  while (PreloadService.instance.isWarming && waited < _kMaxWarmWait) {
+    const step = Duration(milliseconds: 250);
+    await Future<void>.delayed(step);
+    waited += step;
+    if (disposed) return const <AggregatedVersion>[];
+  }
+
   final regex = compilePreferenceRegex(ref.read(preferredVersionRegexProvider));
 
   // 目标身份。
@@ -148,7 +173,7 @@ final episodeAggregationProvider = FutureProvider.autoDispose
 
   final query = isEpisode ? (item.seriesName ?? item.name) : item.name;
 
-  final perServer = await Future.wait(servers.map((server) async {
+  Future<List<AggregatedVersion>> versionsOf(ServerConfig server) async {
     final client = ref.read(serverApiClientProvider(server.id));
     if (client == null) return const <AggregatedVersion>[];
     try {
@@ -167,8 +192,9 @@ final episodeAggregationProvider = FutureProvider.autoDispose
       if (matched == null) return const <AggregatedVersion>[];
       // 打来源标记：让封面/点击解析到正确的服务器（见 MediaItem.sourceServerId）。
       matched.sourceServerId = server.id;
-      final info = await client.playback.getPlaybackInfo(matched.id);
-      return info.mediaSources
+      // 轻量枚举版本（不开流/不 ffprobe），避免在其它服务器上开启播放会话拖慢本机起播。
+      final sources = await client.media.getItemMediaSources(matched.id);
+      return sources
           .map((s) => AggregatedVersion(
                 server: server,
                 item: matched,
@@ -181,9 +207,18 @@ final episodeAggregationProvider = FutureProvider.autoDispose
       AppLogger().w('EpisodeAggregation', '服务器「${server.name}」聚合失败: $e');
       return const <AggregatedVersion>[];
     }
-  }));
+  }
 
-  final all = <AggregatedVersion>[for (final list in perServer) ...list];
+  // 分批发起（并发上限 [_kServerConcurrency]），别一次性打满移动端连接/上行。
+  final all = <AggregatedVersion>[];
+  for (var i = 0; i < servers.length; i += _kServerConcurrency) {
+    if (disposed) break;
+    final batch = servers.skip(i).take(_kServerConcurrency);
+    final results = await Future.wait(batch.map(versionsOf));
+    for (final list in results) {
+      all.addAll(list);
+    }
+  }
 
   final order = <String, int>{
     for (var i = 0; i < servers.length; i++) servers[i].id: i,

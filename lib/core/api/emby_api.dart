@@ -841,6 +841,31 @@ class EmbyMediaApi implements MediaApi {
         .map((e) => _parseMediaItem(e as Map<String, dynamic>))
         .toList();
   }
+
+  @override
+  Future<List<MediaSource>> getItemMediaSources(String itemId) async {
+    if (itemId.isEmpty) return const <MediaSource>[];
+    final uid = _client._userId;
+    final params = <String, dynamic>{'Fields': 'MediaSources,MediaStreams'};
+    if (uid != null) params['UserId'] = uid;
+    Map<String, dynamic> data;
+    try {
+      final resp = await _client.get('/Items/$itemId', queryParameters: params);
+      data = resp.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404 && uid != null) {
+        final resp = await _client.get('/Users/$uid/Items/$itemId',
+            queryParameters: params);
+        data = resp.data as Map<String, dynamic>;
+      } else {
+        rethrow;
+      }
+    }
+    final sources = (data['MediaSources'] as List<dynamic>?) ?? const [];
+    return sources
+        .map((e) => _parseMediaSource(e as Map<String, dynamic>))
+        .toList();
+  }
 }
 
 // ==================== Search ====================

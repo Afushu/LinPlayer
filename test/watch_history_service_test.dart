@@ -344,4 +344,9 @@ class _FakeMediaApi implements MediaApi {
   }) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<MediaSource>> getItemMediaSources(String itemId) {
+    throw UnimplementedError();
+  }
 }

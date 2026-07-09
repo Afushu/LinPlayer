@@ -252,6 +252,12 @@ abstract class MediaApi {
     String? includeItemTypes,
     int limit = 10,
   });
+
+  /// 轻量枚举某条目的媒体源（版本）列表——跨服聚合用。
+  /// GET /Items/{Id}?Fields=MediaSources,MediaStreams（**不**触发 PlaybackInfo 的
+  /// 开流/转码会话，也不 ffprobe 远程文件），比 [PlaybackApi.getPlaybackInfo] 轻得多，
+  /// 只为列出版本、不为起播。
+  Future<List<MediaSource>> getItemMediaSources(String itemId);
 }
 
 class MediaItem {

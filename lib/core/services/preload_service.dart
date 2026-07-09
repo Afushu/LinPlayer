@@ -44,6 +44,11 @@ class PreloadService {
   String? _lastItemId;
   DateTime? _lastAt;
 
+  /// 是否正在预热（发起 PlaybackInfo / Range 预取中）。供跨服聚合等次要网络任务
+  /// 避让：预热是播放前的关键带宽消耗，聚合应等它空闲再跑，别抢起播带宽。
+  bool _warming = false;
+  bool get isWarming => _warming;
+
   static Dio _buildDio() {
     final dio = Dio(BaseOptions(
       connectTimeout: const Duration(seconds: 12),
@@ -103,6 +108,7 @@ class PreloadService {
     required bool strmDirectPlay,
     required CancelToken cancel,
   }) async {
+    _warming = true;
     try {
       final playbackInfo = await api.playback.getPlaybackInfo(itemId);
       if (playbackInfo.mediaSources.isEmpty) return; // 非可直接播放条目（如剧集根）
@@ -137,6 +143,9 @@ class PreloadService {
       // 网络/超时/取消：预热失败无所谓，静默。
     } catch (e) {
       if (kDebugMode) debugPrint('[Preload] 预加载失败: $e');
+    } finally {
+      // 仅当自己仍是当前预热时才清标志（避免被后续预热的 finally 误清）。
+      if (identical(_inFlight, cancel)) _warming = false;
     }
   }
 
