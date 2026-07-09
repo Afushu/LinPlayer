@@ -79,6 +79,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   /// 下拉刷新：失效首页各数据源，解决首次进服务器媒体库加载不全、需要手动重拉的问题。
   Future<void> _refresh() async {
+    // allLibrariesProvider 是 keepAlive，librariesProvider 只是它的过滤视图。若只失效
+    // librariesProvider，依赖仍是缓存 → future 近乎瞬回 → 指示器「一闪就没」。连根一起失效。
+    ref.invalidate(allLibrariesProvider);
     ref.invalidate(librariesProvider);
     ref.invalidate(resumeItemsProvider);
     ref.invalidate(randomRecommendationsProvider);
@@ -87,8 +90,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // 媒体库详情网格同理。下拉刷新一并失效，真正重新获取。
     ref.invalidate(latestItemsProvider);
     ref.invalidate(libraryItemsProvider);
-    // 等媒体库重新拉到再收起指示器；其余栏目随 provider 失效各自刷新。
-    await ref.read(librariesProvider.future);
+    // 等主要栏目都真正重新拉到再收起指示器（而非某个依赖没失效就秒回）。
+    // 单个栏目失败不阻断其它，也不让指示器提前收起。
+    Future<void> guard(Future<Object?> f) => f.then((_) {}, onError: (_) {});
+    await Future.wait([
+      guard(ref.read(librariesProvider.future)),
+      guard(ref.read(resumeItemsProvider.future)),
+      guard(ref.read(randomRecommendationsProvider.future)),
+      guard(ref.read(collectionsProvider.future)),
+    ]);
   }
 
   void _onBackgroundColorChanged(Color color) {
