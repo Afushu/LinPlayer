@@ -448,6 +448,7 @@ class _SubtitleSettingsContentState
     final selectedSecondaryIndex = ref.watch(secondarySubtitleTrackProvider);
     final secondarySubtitlePosition =
         ref.watch(secondarySubtitlePositionProvider);
+    final secondarySubtitleDelay = ref.watch(secondarySubtitleDelayProvider);
     final selectedMediaSourceId = ref.watch(selectedMediaSourceProvider);
 
     if (subtitleAsync == null) {
@@ -564,9 +565,11 @@ class _SubtitleSettingsContentState
                   ))
             else
               const _PanelEmpty(label: '无可用次字幕'),
-            // 次字幕位置（libmpv 0.41+ secondary-sub-pos）——有次字幕可选时即可调（含 strm 回退）。
+            // 次字幕独立调节（位置/延迟）——与主字幕分开的 secondary-sub-* 属性，
+            // 选中次字幕（或 strm 回退有可用文本轨）时才显示，无次字幕时调节无意义。
             if (selectedSecondaryIndex != null ||
-                (subtitles.isEmpty && secondaryPlayerTracks.isNotEmpty))
+                (subtitles.isEmpty && secondaryPlayerTracks.isNotEmpty)) ...[
+              const SizedBox(height: 4),
               PanelSliderRow(
                 label: '次字幕位置',
                 value: secondarySubtitlePosition.clamp(0.0, 1.0),
@@ -578,6 +581,38 @@ class _SubtitleSettingsContentState
                     .read(secondarySubtitlePositionProvider.notifier)
                     .state = value,
               ),
+              const SizedBox(height: 8),
+              const _SectionTitle('次字幕同步'),
+              _SyncControl(
+                value: secondarySubtitleDelay,
+                onDecrease: () => ref
+                    .read(secondarySubtitleDelayProvider.notifier)
+                    .state = secondarySubtitleDelay - 0.5,
+                onIncrease: () => ref
+                    .read(secondarySubtitleDelayProvider.notifier)
+                    .state = secondarySubtitleDelay + 0.5,
+                onCustom: () => _showCustomOffsetDialog(
+                  context,
+                  provider: secondarySubtitleDelayProvider,
+                  title: '自定义次字幕同步',
+                ),
+                onReset: () => ref
+                    .read(secondarySubtitleDelayProvider.notifier)
+                    .state = 0.0,
+              ),
+              // 说明：mpv 无 secondary-sub-scale，--sub-scale 同时作用于主/次字幕，
+              // 故「字幕大小」是两者共用的（见下方主字幕区）；次字幕不单独提供大小滑杆。
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 4, right: 4),
+                child: Text(
+                  '次字幕大小与主字幕共用下方「字幕大小」（mpv 限制）',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: PlayerPanelColors.resolve(context).textSecondary,
+                  ),
+                ),
+              ),
+            ],
             const _Divider(),
             const _SectionTitle('字体'),
             _SettingsItem(
@@ -846,13 +881,18 @@ class _SubtitleSettingsContentState
     );
   }
 
-  void _showCustomOffsetDialog(BuildContext context) {
+  void _showCustomOffsetDialog(
+    BuildContext context, {
+    StateProvider<double>? provider,
+    String title = '自定义字幕同步',
+  }) {
+    final target = provider ?? subtitleDelayProvider;
     final controller = TextEditingController(
-        text: ref.read(subtitleDelayProvider).toStringAsFixed(1));
+        text: ref.read(target).toStringAsFixed(1));
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('自定义字幕同步'),
+        title: Text(title),
         content: TextField(
           controller: controller,
           keyboardType: const TextInputType.numberWithOptions(
@@ -872,7 +912,7 @@ class _SubtitleSettingsContentState
             onPressed: () {
               final value = double.tryParse(controller.text);
               if (value != null) {
-                ref.read(subtitleDelayProvider.notifier).state = value;
+                ref.read(target.notifier).state = value;
               }
               Navigator.pop(context);
             },
