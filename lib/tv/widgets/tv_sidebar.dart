@@ -27,6 +27,7 @@ class _TvSidebarState extends ConsumerState<TvSidebar> {
   static const List<_NavItem> _baseItems = [
     _NavItem(Icons.home_rounded, '首页'),
     _NavItem(Icons.search_rounded, '搜索'),
+    _NavItem(Icons.favorite_rounded, '收藏'),
     _NavItem(Icons.storage_rounded, '服务器'),
     _NavItem(Icons.qr_code_scanner_rounded, '扫码'),
     _NavItem(Icons.settings_rounded, '设置'),

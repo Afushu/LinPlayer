@@ -64,6 +64,7 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
     final recommendationsAsync = ref.watch(randomRecommendationsProvider);
     final resumeAsync = ref.watch(resumeItemsProvider);
     final librariesAsync = ref.watch(librariesProvider);
+    final hideDaily = ref.watch(hideDailyRecommendationsProvider);
 
     return Scaffold(
       backgroundColor: TvDesignTokens.background,
@@ -74,22 +75,24 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Hero Banner（每日推荐）—— 放大至首屏一半以上
-              recommendationsAsync.when(
-                data: (items) {
-                  final heroItems = _heroItems(api, items);
-                  if (heroItems.isEmpty) {
-                    return _heroPlaceholder(m, heroHeight);
-                  }
-                  return Focus(
-                    onFocusChange: (f) => setState(() => _heroFocused = f),
-                    child: TvHeroBanner(items: heroItems, height: heroHeight),
-                  );
-                },
-                loading: () => _heroPlaceholder(m, heroHeight),
-                error: (_, __) => _heroPlaceholder(m, heroHeight),
-              ),
-              SizedBox(height: m.spacingLg),
+              // Hero Banner（每日推荐）—— 放大至首屏一半以上；可在外观设置里隐藏
+              if (!hideDaily) ...[
+                recommendationsAsync.when(
+                  data: (items) {
+                    final heroItems = _heroItems(api, items);
+                    if (heroItems.isEmpty) {
+                      return _heroPlaceholder(m, heroHeight);
+                    }
+                    return Focus(
+                      onFocusChange: (f) => setState(() => _heroFocused = f),
+                      child: TvHeroBanner(items: heroItems, height: heroHeight),
+                    );
+                  },
+                  loading: () => _heroPlaceholder(m, heroHeight),
+                  error: (_, __) => _heroPlaceholder(m, heroHeight),
+                ),
+                SizedBox(height: m.spacingLg),
+              ],
               // 继续观看
               resumeAsync.when(
                 data: (items) {

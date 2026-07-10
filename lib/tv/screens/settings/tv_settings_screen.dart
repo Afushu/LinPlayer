@@ -42,7 +42,9 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
 
   static const List<_SettingCategory> _categories = [
     _SettingCategory(Icons.play_circle_outline, '播放'),
+    _SettingCategory(Icons.subtitles_outlined, '弹幕'),
     _SettingCategory(Icons.settings, '通用'),
+    _SettingCategory(Icons.palette_outlined, '外观'),
     _SettingCategory(Icons.vpn_key, '网络'),
     _SettingCategory(Icons.translate, '翻译'),
     _SettingCategory(Icons.sync, '同步'),
@@ -113,14 +115,18 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
       case 0:
         return _buildPlaybackSettings(m);
       case 1:
-        return _buildGeneralSettings(m);
+        return _buildDanmakuSettings(m);
       case 2:
-        return _buildNetworkSettings(m);
+        return _buildGeneralSettings(m);
       case 3:
-        return _buildTranslationSettings(m);
+        return _buildAppearanceSettings(m);
       case 4:
-        return const TvSyncSettings();
+        return _buildNetworkSettings(m);
       case 5:
+        return _buildTranslationSettings(m);
+      case 6:
+        return const TvSyncSettings();
+      case 7:
         return _buildAboutSettings(m);
       default:
         return const SizedBox.shrink();
@@ -361,6 +367,179 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
       }
     }
     ref.read(provider.notifier).state = value;
+  }
+
+  /// 外观设置：TV 强制深色 + 纯色背景，故仅保留在 TV 上真正生效的项——
+  /// 语言（tv_app 已 watch localeProvider）与隐藏每日推荐（首页 Hero Banner）。
+  Widget _buildAppearanceSettings(TvMetrics m) {
+    final locale = ref.watch(localeProvider);
+    final hideDaily = ref.watch(hideDailyRecommendationsProvider);
+    return _settingsList(m, '外观设置', [
+      _choiceItem<Locale?>(
+        m,
+        title: '语言',
+        current: locale,
+        options: const [
+          MapEntry('跟随系统', null),
+          MapEntry('简体中文', Locale('zh', 'CN')),
+          MapEntry('English', Locale('en')),
+        ],
+        labelOf: (v) => v == null ? '跟随系统' : v.toLanguageTag(),
+        onPick: (v) => ref.read(localeProvider.notifier).state = v,
+      ),
+      _toggleItem(
+        m,
+        title: '隐藏每日推荐',
+        subtitle: '关闭首页顶部的每日推荐 Hero 大图',
+        value: hideDaily,
+        onToggle: () => ref
+            .read(hideDailyRecommendationsProvider.notifier)
+            .state = !hideDaily,
+      ),
+    ]);
+  }
+
+  /// 弹幕设置：离散档位（遥控友好），对齐移动端弹幕设置的可调项。
+  /// 屏蔽词/自定义源/字体在 TV 上省略（前者需文字输入、后者已在「通用·弹幕字体」）。
+  Widget _buildDanmakuSettings(TvMetrics m) {
+    final enabled = ref.watch(danmakuEnabledProvider);
+    final opacity = ref.watch(danmakuOpacityProvider);
+    final fontSize = ref.watch(danmakuFontSizeProvider);
+    final speed = ref.watch(danmakuSpeedProvider);
+    final density = ref.watch(danmakuDensityProvider);
+    final displayArea = ref.watch(danmakuDisplayAreaProvider);
+    final stroke = ref.watch(danmakuStrokeProvider);
+    final delay = ref.watch(danmakuDelayProvider);
+    final dedup = ref.watch(danmakuDedupProvider);
+    final dedupWindow = ref.watch(danmakuDedupWindowProvider);
+
+    return _settingsList(m, '弹幕设置', [
+      _toggleItem(
+        m,
+        title: '弹幕开关',
+        subtitle: enabled ? '已开启' : '已关闭',
+        value: enabled,
+        onToggle: () =>
+            ref.read(danmakuEnabledProvider.notifier).state = !enabled,
+      ),
+      _choiceItem<double>(
+        m,
+        title: '透明度',
+        current: opacity,
+        options: const [
+          MapEntry('40%', 0.4),
+          MapEntry('60%', 0.6),
+          MapEntry('80%', 0.8),
+          MapEntry('100%', 1.0),
+        ],
+        labelOf: (v) => '${(v * 100).round()}%',
+        onPick: (v) => ref.read(danmakuOpacityProvider.notifier).state = v,
+      ),
+      _choiceItem<double>(
+        m,
+        title: '字号',
+        current: fontSize,
+        options: const [
+          MapEntry('小', 0.3),
+          MapEntry('较小', 0.4),
+          MapEntry('标准', 0.5),
+          MapEntry('较大', 0.7),
+          MapEntry('大', 0.9),
+        ],
+        labelOf: (v) => v.toStringAsFixed(2),
+        onPick: (v) => ref.read(danmakuFontSizeProvider.notifier).state = v,
+      ),
+      _choiceItem<double>(
+        m,
+        title: '速度',
+        current: speed,
+        options: const [
+          MapEntry('慢', 0.2),
+          MapEntry('较慢', 0.35),
+          MapEntry('标准', 0.5),
+          MapEntry('较快', 0.7),
+          MapEntry('快', 0.9),
+        ],
+        labelOf: (v) => v.toStringAsFixed(2),
+        onPick: (v) => ref.read(danmakuSpeedProvider.notifier).state = v,
+      ),
+      _choiceItem<double>(
+        m,
+        title: '密度',
+        current: density,
+        options: const [
+          MapEntry('稀疏', 0.2),
+          MapEntry('较疏', 0.35),
+          MapEntry('标准', 0.5),
+          MapEntry('较密', 0.7),
+          MapEntry('密集', 0.9),
+        ],
+        labelOf: (v) => v.toStringAsFixed(2),
+        onPick: (v) => ref.read(danmakuDensityProvider.notifier).state = v,
+      ),
+      _choiceItem<double>(
+        m,
+        title: '显示区域',
+        subtitle: '弹幕占用的画面高度范围',
+        current: displayArea,
+        options: const [
+          MapEntry('顶部 1/4', 0.25),
+          MapEntry('半屏', 0.5),
+          MapEntry('全屏', 1.0),
+        ],
+        onPick: (v) =>
+            ref.read(danmakuDisplayAreaProvider.notifier).state = v,
+      ),
+      _toggleItem(
+        m,
+        title: '描边文字',
+        subtitle: '黑边彩字，关闭则用半透明底框',
+        value: stroke,
+        onToggle: () =>
+            ref.read(danmakuStrokeProvider.notifier).state = !stroke,
+      ),
+      _choiceItem<double>(
+        m,
+        title: '弹幕延迟',
+        subtitle: '弹幕相对视频提前/延后出现',
+        current: delay,
+        options: const [
+          MapEntry('-3s', -3.0),
+          MapEntry('-2s', -2.0),
+          MapEntry('-1s', -1.0),
+          MapEntry('不延迟', 0.0),
+          MapEntry('+1s', 1.0),
+          MapEntry('+2s', 2.0),
+          MapEntry('+3s', 3.0),
+        ],
+        labelOf: (v) => '${v.toStringAsFixed(1)}s',
+        onPick: (v) => ref.read(danmakuDelayProvider.notifier).state = v,
+      ),
+      _toggleItem(
+        m,
+        title: '弹幕去重',
+        subtitle: '合并相同文本弹幕，显示重复次数',
+        value: dedup,
+        onToggle: () =>
+            ref.read(danmakuDedupProvider.notifier).state = !dedup,
+      ),
+      if (dedup)
+        _choiceItem<double>(
+          m,
+          title: '去重时间窗口',
+          current: dedupWindow,
+          options: const [
+            MapEntry('5 秒', 5.0),
+            MapEntry('10 秒', 10.0),
+            MapEntry('15 秒', 15.0),
+            MapEntry('20 秒', 20.0),
+            MapEntry('30 秒', 30.0),
+          ],
+          labelOf: (v) => '${v.toStringAsFixed(0)} 秒',
+          onPick: (v) =>
+              ref.read(danmakuDedupWindowProvider.notifier).state = v,
+        ),
+    ]);
   }
 
   Widget _buildGeneralSettings(TvMetrics m) {

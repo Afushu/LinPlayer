@@ -27,6 +27,7 @@ class _TvShellState extends State<TvShell> {
   static const List<String> _routes = [
     '/tv/home',
     '/tv/search',
+    '/tv/favorites',
     '/tv/server',
     '/tv/scan',
     '/tv/settings',

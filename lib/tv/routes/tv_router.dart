@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/home/tv_home_screen.dart';
 import '../screens/search/tv_search_screen.dart';
 import '../screens/library/tv_library_screen.dart';
+import '../screens/favorites/tv_favorites_screen.dart';
 import '../screens/server/tv_server_screen.dart';
 import '../screens/server/tv_add_server_screen.dart';
 import '../screens/server/tv_edit_server_screen.dart';
@@ -123,14 +124,16 @@ final tvRouter = GoRouter(
         int selectedIndex = 0;
         if (path.startsWith('/tv/search')) {
           selectedIndex = 1;
-        } else if (path.startsWith('/tv/server')) {
+        } else if (path.startsWith('/tv/favorites')) {
           selectedIndex = 2;
-        } else if (path.startsWith('/tv/scan')) {
+        } else if (path.startsWith('/tv/server')) {
           selectedIndex = 3;
-        } else if (path.startsWith('/tv/settings')) {
+        } else if (path.startsWith('/tv/scan')) {
           selectedIndex = 4;
-        } else if (path.startsWith('/tv/rankings')) {
+        } else if (path.startsWith('/tv/settings')) {
           selectedIndex = 5;
+        } else if (path.startsWith('/tv/rankings')) {
+          selectedIndex = 6;
         }
         return TvShell(
           selectedIndex: selectedIndex,
@@ -152,6 +155,10 @@ final tvRouter = GoRouter(
             initialLibraryId: state.uri.queryParameters['libraryId'],
             initialTitle: state.uri.queryParameters['title'],
           ),
+        ),
+        GoRoute(
+          path: '/tv/favorites',
+          builder: (context, state) => const TvFavoritesScreen(),
         ),
         GoRoute(
           path: '/tv/server',
