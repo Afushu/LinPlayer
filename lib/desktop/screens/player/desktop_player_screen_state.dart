@@ -1951,11 +1951,15 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
 
   Future<void> _showAnime4KMenu() async {
     final currentLevel = ref.read(anime4KLevelProvider);
+    // A/B/C 由弱到强；A+A/B+B/A+C 为双通道加强档（与移动端一致，共 6 档）。
     const levels = [
       {'value': 'off', 'label': '关闭'},
       {'value': 'modeA', 'label': '模式 A - 性能优先'},
       {'value': 'modeB', 'label': '模式 B - 平衡'},
       {'value': 'modeC', 'label': '模式 C - 质量优先'},
+      {'value': 'modeAA', 'label': '模式 A+A - 加强'},
+      {'value': 'modeBB', 'label': '模式 B+B - 加强'},
+      {'value': 'modeAC', 'label': '模式 A+C - 加强'},
     ];
     final result = await showPlayerSettingsPanel<String>(
       context: context,
@@ -1971,28 +1975,23 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
     );
     if (result != null && mounted) {
       try {
-        // Win/macOS 软件纹理下开/关超分要跨「软件↔硬件纹理」边界，纹理模式在建
-        // VideoController 时定死，只能整体重建播放管线才能让 GLSL shader 真正生效。
-        if (_playerService.superResolutionRequiresReinit(result)) {
-          ref.read(anime4KLevelProvider.notifier).state = result;
-          final savedPosition = _playerService.position;
-          final wasPlaying = _playerService.isPlaying;
-          await _playerService.dispose();
-          _playerService = VideoPlayerService();
-          await _initializePlayer();
-          if (savedPosition > Duration.zero) {
-            await _playerService.seekTo(savedPosition);
-          }
-          if (!wasPlaying) {
-            await _playerService.pause();
-          }
+        ref.read(anime4KLevelProvider.notifier).state = result;
+        // 软件纹理（Win/macOS 消闪屏）下 SW 渲染不跑 GLSL shader，无法运行时开超分。
+        // 不再整段重建播放管线（那会把已缓冲的流从头重新下载、进度跳回、爆卡），
+        // 而是存下档位、提示下次播放生效——起播时用硬件纹理重建自然带上 shader。
+        if (result != 'off' && !_playerService.superResolutionCanApplyLive) {
+          if (!mounted) return;
+          AppToast.show(
+            context,
+            '已选择 Anime4K ${_anime4KLevelLabel(result)}，将在下次播放时生效',
+            position: AppToastPosition.topCenter,
+          );
+          return;
+        }
+        if (result == 'off') {
+          await _playerService.applySuperResolution(false);
         } else {
-          if (result == 'off') {
-            await _playerService.applySuperResolution(false);
-          } else {
-            await _playerService.applySuperResolutionLevel(result);
-          }
-          ref.read(anime4KLevelProvider.notifier).state = result;
+          await _playerService.applySuperResolutionLevel(result);
         }
         if (!mounted) return;
         AppToast.show(
@@ -2019,6 +2018,12 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
         return '模式 B';
       case 'modeC':
         return '模式 C';
+      case 'modeAA':
+        return '模式 A+A';
+      case 'modeBB':
+        return '模式 B+B';
+      case 'modeAC':
+        return '模式 A+C';
       default:
         return level;
     }

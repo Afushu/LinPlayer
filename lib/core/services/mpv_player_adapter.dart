@@ -58,6 +58,9 @@ class MpvPlayerAdapter implements PlayerAdapter {
   String? _userAgentOverride;
   String? _aspectRatio;
   List<String>? _glslShaders;
+  // 当前 VideoController 是否走软件纹理（Win/macOS 消闪屏用）。软件纹理的 SW 渲染
+  // 管线不跑 GLSL shader，故此时无法即时开超分——需下次播放用硬件纹理重建才生效。
+  bool _softwareTextureActive = false;
   bool _subtitleBackground = false;
   String? _secondarySid;
   bool _hasBitmapSubtitle = false;
@@ -110,6 +113,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
   @override
   String? get errorMessage => _errorMessage;
   bool get pgsDecoderAvailable => _pgsDecoderAvailable;
+  // 软件纹理下无法即时切换 GLSL 超分（SW 渲染不跑 shader）。
+  bool get isSoftwareTexture => _softwareTextureActive;
   @override
   bool get libassReady => true;
   @override
@@ -616,6 +621,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
       final wantsShaders = _glslShaders != null && _glslShaders!.isNotEmpty;
       final softwareTexture =
           (Platform.isMacOS || Platform.isWindows) && !wantsShaders;
+      _softwareTextureActive = softwareTexture;
       _videoController = VideoController(
         _player!,
         configuration: softwareTexture

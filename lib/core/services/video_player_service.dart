@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'dart:math' show max, min;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -1104,18 +1103,18 @@ class VideoPlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 切到 [level] 是否需要外层整体重建播放管线才能生效。
+  /// 当前是否能「即时」切换超分档位（含开/关）而无需重建播放管线。
   ///
-  /// media_kit 在 Windows/macOS 默认走软件纹理（消除弹面板闪屏），而软件纹理的
-  /// libmpv SW 渲染管线根本不跑 GLSL user shader → 超分开了也无变化。开/关超分
-  /// 会跨越「软件纹理↔硬件纹理」边界，纹理模式在建 VideoController 时就定死，只能
-  /// 整体重建。档位之间互切（都开着）不跨边界，直接 live 应用即可。
-  bool superResolutionRequiresReinit(String level) {
-    final crossesOnOff =
-        (_superResolutionLevel == 'off') != (level == 'off');
-    final swTextureKernel = _adapter is MpvPlayerAdapter &&
-        (Platform.isMacOS || Platform.isWindows);
-    return crossesOnOff && swTextureKernel;
+  /// GLSL user shader 只能在硬件(OpenGL)渲染管线里跑。media_kit 在 Windows/macOS
+  /// 默认走软件纹理（消弹面板闪屏），SW 渲染管线不跑 shader → 此时开超分毫无变化，
+  /// 且纹理模式在建 VideoController 时就定死，无法运行时切换。所以：
+  /// - Android 原生 mpv / 已是硬件纹理的桌面 → 可即时应用。
+  /// - 桌面软件纹理下想开超分 → 不即时重建（避免整段重新缓冲），改为存档位，
+  ///   下次播放用硬件纹理起播时自动生效。
+  bool get superResolutionCanApplyLive {
+    final a = _adapter;
+    if (a is MpvPlayerAdapter) return !a.isSoftwareTexture;
+    return true; // 原生 mpv 恒硬件表面；其余内核不支持超分菜单也走不到这里
   }
 
   String get superResolutionLevel => _superResolutionLevel;
