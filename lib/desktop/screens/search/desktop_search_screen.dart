@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/widgets/app_shimmer.dart';
+import '../../../ui/widgets/common/server_group_header.dart';
 import '../../utils/desktop_smooth_scroll.dart';
 import '../../widgets/desktop_media_card.dart';
 
@@ -174,7 +175,9 @@ class _DesktopSearchScreenState extends ConsumerState<DesktopSearchScreen> {
             ),
           const Divider(),
           Expanded(
-            child: searchResultsAsync.when(
+            child: _isAggregateSearch && searchQuery.isNotEmpty
+                ? _buildAggregateResults(theme)
+                : searchResultsAsync.when(
               data: (items) {
                 if (searchQuery.isEmpty) {
                   return Center(
@@ -243,6 +246,62 @@ class _DesktopSearchScreenState extends ConsumerState<DesktopSearchScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 聚合搜索：每台服务器一组（组头=服务器图标+名），下面封面多行平铺（PC 宽屏）。
+  Widget _buildAggregateResults(ThemeData theme) {
+    final aggregateAsync = ref.watch(aggregateSearchResultsProvider);
+    return aggregateAsync.when(
+      loading: () => const AppLoadingIndicator(),
+      error: (_, __) => Center(
+        child: Text('搜索失败',
+            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey)),
+      ),
+      data: (aggregateData) {
+        if (aggregateData.isEmpty) {
+          return Center(
+            child: Text('没有找到匹配结果',
+                style:
+                    theme.textTheme.bodyMedium?.copyWith(color: Colors.grey)),
+          );
+        }
+        return ListView.builder(
+          controller: _resultsScrollController,
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          itemCount: aggregateData.length,
+          itemBuilder: (context, i) {
+            final serverName = aggregateData.keys.elementAt(i);
+            final items = aggregateData[serverName]!;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ServerGroupHeader(
+                    serverId: items.first.sourceServerId,
+                    serverName: serverName,
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 18,
+                    runSpacing: 24,
+                    children: [
+                      for (final item in items)
+                        DesktopMediaCard(
+                          item: item,
+                          width: 150,
+                          titleMaxLines: 2,
+                          showMetadata: true,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

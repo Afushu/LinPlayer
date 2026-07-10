@@ -8,6 +8,7 @@ import '../../../core/theme/app_motion.dart';
 import '../../../core/widgets/app_shimmer.dart';
 import '../../utils/media_helpers.dart';
 import '../../widgets/common/media_widgets.dart';
+import '../../widgets/common/server_group_header.dart';
 
 /// 搜索页（含聚合搜索）
 class SearchScreen extends ConsumerStatefulWidget {
@@ -194,7 +195,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   
   Widget _buildAggregateResults() {
     // 复用共享的跨服务器聚合 provider（并行查询 + 失败记日志），不再在 UI 层
-    // 自己串行遍历服务器，三端口径统一。
+    // 自己串行遍历服务器，三端口径统一。每台服务器一行，横向滑动浏览封面。
     final aggregateAsync = ref.watch(aggregateSearchResultsProvider);
 
     return aggregateAsync.when(
@@ -206,47 +207,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           itemCount: aggregateData.length,
           itemBuilder: (context, serverIndex) {
             final serverName = aggregateData.keys.elementAt(serverIndex);
             final items = aggregateData[serverName]!;
-            
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(width: 40, height: 1, color: Theme.of(context).dividerColor),
-                      const SizedBox(width: 8),
-                      Text(
-                        serverName,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(width: 40, height: 1, color: Theme.of(context).dividerColor),
-                    ],
+                const SizedBox(height: 12),
+                ServerGroupHeader(
+                  serverId: items.first.sourceServerId,
+                  serverName: serverName,
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 214,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (_, i) =>
+                        _AggregatePosterCard(item: items[i]),
                   ),
                 ),
-                ...items.map((item) => Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    onTap: () => openMediaItem(ref, context, item),
-                    title: Text(item.name),
-                    subtitle: Text(item.type == 'Movie' ? '电影' : '剧集'),
-                    trailing: item.communityRating != null
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.star, size: 16, color: Colors.amber),
-                              Text(item.communityRating!.toStringAsFixed(1)),
-                            ],
-                          )
-                        : null,
-                  ),
-                )),
+                const SizedBox(height: 12),
               ],
             );
           },
@@ -271,6 +256,56 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             style: TextStyle(color: Theme.of(context).colorScheme.outline),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 聚合搜索一行内的封面卡：封面 + 下方标题。点按打开（跨服务器先切服务器）。
+class _AggregatePosterCard extends ConsumerWidget {
+  final MediaItem item;
+  const _AggregatePosterCard({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    const w = 110.0;
+    const h = 165.0;
+    final api = apiClientForItem(ref, item);
+    final imageUrls = resolveMediaItemImageUrls(api, item, maxWidth: 240);
+    return SizedBox(
+      width: w,
+      child: GestureDetector(
+        onTap: () => openMediaItem(ref, context, item),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: w,
+                height: h,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: imageUrls.isNotEmpty
+                    ? MediaImage(
+                        imageUrl: imageUrls.first,
+                        imageUrls:
+                            imageUrls.length > 1 ? imageUrls.sublist(1) : null,
+                        width: w,
+                        height: h,
+                        fit: BoxFit.cover,
+                      )
+                    : const Icon(Icons.image, color: Colors.grey),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              item.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12.5, height: 1.2),
+            ),
+          ],
+        ),
       ),
     );
   }

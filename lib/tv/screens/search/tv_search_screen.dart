@@ -7,11 +7,13 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../../core/providers/server_providers.dart';
 import '../../../ui/utils/media_helpers.dart';
 import '../../../ui/widgets/common/media_widgets.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_poster_card.dart';
 
 /// TV / Pad 搜索页
 ///
@@ -253,6 +255,7 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
   }
 
   Widget _buildSearchResults(TvMetrics m) {
+    if (ref.watch(aggregateSearchProvider)) return _buildAggregateResults(m);
     final resultsAsync = ref.watch(searchResultsProvider);
     final query = ref.watch(searchQueryProvider);
 
@@ -299,6 +302,110 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
             color: TvDesignTokens.textSecondary,
           ),
         ),
+      ),
+    );
+  }
+
+  /// 聚合搜索：每台服务器一行（组头=服务器图标+名），下面封面横向排列，
+  /// 遥控器左右切换浏览、上下跨行。
+  Widget _buildAggregateResults(TvMetrics m) {
+    final aggregateAsync = ref.watch(aggregateSearchResultsProvider);
+    return aggregateAsync.when(
+      loading: () => const Center(
+        child: AppLoadingIndicator(size: 48, color: TvDesignTokens.brand),
+      ),
+      error: (e, _) => Center(
+        child: Text('搜索失败：$e',
+            style: TextStyle(
+                fontSize: m.fontSizeSm, color: TvDesignTokens.textSecondary)),
+      ),
+      data: (aggregateData) {
+        if (aggregateData.isEmpty) {
+          return Center(
+            child: Text('没有找到结果',
+                style: TextStyle(
+                    fontSize: m.fontSizeMd,
+                    color: TvDesignTokens.textDisabled)),
+          );
+        }
+        return ListView(
+          children: [
+            for (final serverName in aggregateData.keys)
+              _buildAggregateRow(m, serverName, aggregateData[serverName]!),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAggregateRow(
+      TvMetrics m, String serverName, List<MediaItem> items) {
+    String? iconUrl;
+    for (final s in ref.watch(serverListProvider)) {
+      if (s.id == items.first.sourceServerId) {
+        iconUrl = s.iconUrl;
+        break;
+      }
+    }
+    return Padding(
+      padding: EdgeInsets.only(bottom: m.spacingLg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(m.s(6)),
+                child: SizedBox(
+                  width: m.s(32),
+                  height: m.s(32),
+                  child: iconUrl != null
+                      ? MediaImage(
+                          imageUrl: iconUrl,
+                          width: m.s(32),
+                          height: m.s(32),
+                          fit: BoxFit.contain,
+                          useDefaultUserAgent: true,
+                          errorWidget: const EmbyDefaultIcon(),
+                        )
+                      : const EmbyDefaultIcon(),
+                ),
+              ),
+              SizedBox(width: m.spacingSm),
+              Text(serverName,
+                  style: TextStyle(
+                      fontSize: m.fontSizeLg,
+                      color: TvDesignTokens.textPrimary,
+                      fontWeight: FontWeight.bold)),
+            ],
+          ),
+          SizedBox(height: m.spacingMd),
+          SizedBox(
+            height: m.s(260),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: items.length,
+              separatorBuilder: (_, __) => SizedBox(width: m.spacingMd),
+              itemBuilder: (_, i) => _buildAggregatePoster(m, items[i]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAggregatePoster(TvMetrics m, MediaItem item) {
+    final api = apiClientForItem(ref, item);
+    final urls = resolveMediaItemImageUrls(api, item, maxWidth: 320);
+    return TvFocusable(
+      padding: const EdgeInsets.all(4),
+      onSelect: () => _openResult(item),
+      child: TvPosterCard(
+        imageUrl: urls.isNotEmpty ? urls.first : null,
+        title: item.name,
+        subtitle: _resultSubtitle(item),
+        width: m.s(130),
+        height: m.s(195),
       ),
     );
   }
