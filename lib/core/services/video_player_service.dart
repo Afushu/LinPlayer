@@ -1119,6 +1119,15 @@ class VideoPlayerService extends ChangeNotifier {
 
   String get superResolutionLevel => _superResolutionLevel;
 
+  /// mpv 应用超分后实际持有的 shader 数（回读值）。0 = 没落到内核；>0 但软件纹理
+  /// 下仍不会渲染。用于 UI 给用户「到底生效没」的确切反馈，取代盲猜。
+  int get activeGlslShaderCount {
+    final a = _adapter;
+    if (a is MpvPlayerAdapter) return a.activeGlslShaderCount;
+    if (a is NativeMpvPlayerAdapter) return a.activeGlslShaderCount;
+    return 0;
+  }
+
   /// 获取播放统计信息
   Future<Map<String, String>> getPlaybackStats() async {
     return await _adapter?.getPlaybackStats() ?? {};

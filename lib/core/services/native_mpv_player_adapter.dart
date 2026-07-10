@@ -54,6 +54,9 @@ class NativeMpvPlayerAdapter implements PlayerAdapter {
   List<String> _currentShaders = [];
   bool _superResolutionEnabled = false;
   String _superResolutionLevel = 'off';
+  // mpv 应用后实际持有的 shader 数（回读）。原生恒硬件表面，>0 即会渲染。
+  int _activeGlslShaderCount = 0;
+  int get activeGlslShaderCount => _activeGlslShaderCount;
 
   PlayerStateCallbacks? _callbacks;
   Timer? _positionTimer;
@@ -243,7 +246,7 @@ class NativeMpvPlayerAdapter implements PlayerAdapter {
       }
       // Re-apply shaders if super resolution was previously enabled
       if (_superResolutionEnabled && _currentShaders.isNotEmpty) {
-        _applyShaderList();
+        await _applyShaderList();
       }
 
       _callbacks?.onDurationChanged?.call();
@@ -562,27 +565,39 @@ class NativeMpvPlayerAdapter implements PlayerAdapter {
     }
     if (_playerId == null || !_isInitialized) return;
     if (enabled && _currentShaders.isNotEmpty) {
-      _applyShaderList();
+      await _applyShaderList();
     } else {
       _clearShaders();
     }
   }
 
-  void _applyShaderList() {
+  Future<void> _applyShaderList() async {
     if (_playerId == null) return;
-    // Shader paths are set from the MpvPlayerAdapter's asset loading logic.
-    // For now, send the command to clear and re-add shaders.
     _clearShaders();
+    // await 每条 append，确保回读前命令已入队处理，否则数出来的 shader 数偏少。
     for (final shader in _currentShaders) {
-      _channel.invokeMethod('command', {
+      await _channel.invokeMethod('command', {
         'playerId': _playerId,
         'args': ['change-list', 'glsl-shaders', 'append', shader],
       });
+    }
+    // 回读 mpv 实际持有的 glsl-shaders，确认真的落到内核（数 .glsl 出现次数，
+    // 路径可能含冒号不能按分隔符切）。原生 mpv 恒硬件表面，>0 即会渲染。
+    try {
+      final raw = await _channel.invokeMethod<String>('getProperty', {
+            'playerId': _playerId,
+            'name': 'glsl-shaders',
+          }) ??
+          '';
+      _activeGlslShaderCount = '.glsl'.allMatches(raw).length;
+    } catch (_) {
+      _activeGlslShaderCount = _currentShaders.length;
     }
   }
 
   void _clearShaders() {
     if (_playerId == null) return;
+    _activeGlslShaderCount = 0;
     _channel.invokeMethod('command', {
       'playerId': _playerId,
       'args': ['change-list', 'glsl-shaders', 'clr', ''],
@@ -592,7 +607,7 @@ class NativeMpvPlayerAdapter implements PlayerAdapter {
   void setShaderPaths(List<String> paths) {
     _currentShaders = paths;
     if (_superResolutionEnabled) {
-      _applyShaderList();
+      unawaited(_applyShaderList());
     }
   }
 

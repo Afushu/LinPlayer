@@ -1994,11 +1994,17 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
           await _playerService.applySuperResolutionLevel(result);
         }
         if (!mounted) return;
+        final n = _playerService.activeGlslShaderCount;
         AppToast.show(
           context,
           result == 'off'
               ? '已关闭 Anime4K 超分'
-              : '已应用 Anime4K ${_anime4KLevelLabel(result)}',
+              : n > 0
+                  ? '已应用 Anime4K ${_anime4KLevelLabel(result)}（$n 个 shader）'
+                  : '⚠️ Anime4K shader 未进入内核，超分未生效',
+          kind: result != 'off' && n == 0
+              ? AppToastKind.error
+              : AppToastKind.info,
           position: AppToastPosition.topCenter,
         );
       } catch (e) {

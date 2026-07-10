@@ -2326,8 +2326,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               await _playerService.applySuperResolutionLevel(mode);
               if (!mounted) return;
               setState(() => _anime4kMode = mode);
-              AppToast.show(context,
-                  mode == 'off' ? '已关闭超分' : '已应用 Anime4K Mode $label',
+              final n = _playerService.activeGlslShaderCount;
+              AppToast.show(
+                  context,
+                  mode == 'off'
+                      ? '已关闭超分'
+                      : n > 0
+                          ? '已应用 Anime4K Mode $label（$n 个 shader）'
+                          : '⚠️ Anime4K shader 未进入内核，超分未生效',
+                  kind: mode != 'off' && n == 0
+                      ? AppToastKind.error
+                      : AppToastKind.info,
                   position: AppToastPosition.topCenter);
             },
           ),

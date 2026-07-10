@@ -61,6 +61,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
   // 当前 VideoController 是否走软件纹理（Win/macOS 消闪屏用）。软件纹理的 SW 渲染
   // 管线不跑 GLSL shader，故此时无法即时开超分——需下次播放用硬件纹理重建才生效。
   bool _softwareTextureActive = false;
+  // 上次应用后 mpv 实际持有的 glsl-shader 数（回读值），供 UI 显示「真的生效了吗」。
+  int _activeGlslShaderCount = 0;
   bool _subtitleBackground = false;
   String? _secondarySid;
   bool _hasBitmapSubtitle = false;
@@ -115,6 +117,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
   bool get pgsDecoderAvailable => _pgsDecoderAvailable;
   // 软件纹理下无法即时切换 GLSL 超分（SW 渲染不跑 shader）。
   bool get isSoftwareTexture => _softwareTextureActive;
+  // mpv 实际持有的 Anime4K shader 数；软件纹理下即使>0 也不会渲染，需一并看 isSoftwareTexture。
+  int get activeGlslShaderCount => _activeGlslShaderCount;
   @override
   bool get libassReady => true;
   @override
@@ -511,6 +515,17 @@ class MpvPlayerAdapter implements PlayerAdapter {
     return shaderFile.path.replaceAll('\\', '/');
   }
 
+  // 回读 mpv 的 glsl-shaders 属性，数其中 .glsl 出现次数（Windows 路径含盘符冒号，
+  // 不能按分隔符切，数 .glsl 最稳）。失败则退回期望值，不误报 0。
+  Future<int> _readbackShaderCount(NativePlayer np, int expected) async {
+    try {
+      final raw = await np.getProperty('glsl-shaders');
+      return '.glsl'.allMatches(raw).length;
+    } catch (_) {
+      return expected;
+    }
+  }
+
   Future<void> _applyShaderList(List<String>? shaderRefs) async {
     final np = _nativePlayer;
     if (np == null) {
@@ -524,6 +539,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
     }
 
     if (shaderRefs == null || shaderRefs.isEmpty) {
+      _activeGlslShaderCount = 0;
       _logger.i('MpvAdapter', 'Anime4K 已关闭');
       return;
     }
@@ -541,7 +557,13 @@ class MpvPlayerAdapter implements PlayerAdapter {
     for (final shaderPath in resolvedPaths) {
       await np.command(['change-list', 'glsl-shaders', 'append', shaderPath]);
     }
-    _logger.i('MpvAdapter', 'Anime4K shaders 已应用: ${resolvedPaths.join(', ')}');
+    // 回读 mpv 实际持有的 glsl-shaders，确认命令真的落到内核（而非静默丢弃）。
+    // 软件纹理(SW 渲染)下即便回读非空，libmpv SW 管线也不会执行 shader → 画面无变化，
+    // 所以回读数 + 纹理模式一起看才能判断「到底有没有生效」。
+    _activeGlslShaderCount = await _readbackShaderCount(np, resolvedPaths.length);
+    _logger.i('MpvAdapter',
+        'Anime4K shaders 已应用(回读 $_activeGlslShaderCount/${resolvedPaths.length}, '
+        '软件纹理=$_softwareTextureActive): ${resolvedPaths.join(', ')}');
   }
 
   @override
