@@ -156,13 +156,17 @@ class SyncController extends StateNotifier<SyncState> {
 
   // ---- 追剧日历 ----
 
-  /// 按来源拉取追剧日历；未连接对应服务时返回空列表。
-  Future<List<CalendarEntry>> fetchCalendar(SyncService source) {
+  /// 按来源拉取追剧日历；[onlyMine] 为 true 只看我追的，false 显示整季全部。
+  /// 未连接对应服务时返回空列表。
+  Future<List<CalendarEntry>> fetchCalendar(
+    SyncService source, {
+    bool onlyMine = true,
+  }) {
     switch (source) {
       case SyncService.trakt:
-        return trakt.fetchShowsCalendar();
+        return trakt.fetchShowsCalendar(onlyMine: onlyMine);
       case SyncService.bangumi:
-        return bangumi.fetchWatchingCalendar();
+        return bangumi.fetchAnimeCalendar(onlyMine: onlyMine);
     }
   }
 

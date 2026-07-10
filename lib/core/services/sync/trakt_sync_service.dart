@@ -275,11 +275,13 @@ class TraktSyncService {
     }
   }
 
-  /// 拉取「我的追剧日历」：从 [startOffsetDays] 天前起、共 [days] 天内我在追剧集的放送。
+  /// 拉取追剧日历：从 [startOffsetDays] 天前起、共 [days] 天内的剧集放送。
+  /// [onlyMine] 为 true 只看我追的（/calendars/my），false 显示全部放送（/calendars/all）。
   /// 需已连接 Trakt；未连接/失败返回空列表。
   Future<List<CalendarEntry>> fetchShowsCalendar({
     int startOffsetDays = 3,
     int days = 21,
+    bool onlyMine = true,
   }) async {
     final account = SyncSession.current(SyncService.trakt);
     if (account == null) return const [];
@@ -289,9 +291,12 @@ class TraktSyncService {
     final startStr = '${start.year.toString().padLeft(4, '0')}-'
         '${start.month.toString().padLeft(2, '0')}-'
         '${start.day.toString().padLeft(2, '0')}';
+    // /calendars/all 是「全站放送」火喉，量极大——截断防止列表爆炸。
+    const allCap = 200;
+    final scope = onlyMine ? 'my' : 'all';
     try {
       final resp = await _dio.get(
-        '/calendars/my/shows/$startStr/$days',
+        '/calendars/$scope/shows/$startStr/$days',
         options: Options(headers: _authHeaders(valid.accessToken)),
       );
       if ((resp.statusCode ?? 0) != 200 || resp.data is! List) {
@@ -300,6 +305,7 @@ class TraktSyncService {
       }
       final out = <CalendarEntry>[];
       for (final raw in resp.data as List) {
+        if (!onlyMine && out.length >= allCap) break;
         if (raw is! Map) continue;
         final show = raw['show'];
         final ep = raw['episode'];

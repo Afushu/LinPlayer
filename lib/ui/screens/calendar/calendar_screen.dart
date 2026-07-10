@@ -9,6 +9,24 @@ import '../../../core/services/afdian_service.dart';
 import '../../../core/services/sync/calendar_models.dart';
 import '../../../core/services/sync/sync_models.dart';
 
+/// 打开追剧日历（未解锁先弹爱发电订单校验）。设置入口与底部导航共用。
+Future<void> openCalendarGated(BuildContext context, WidgetRef ref) async {
+  if (!ref.read(premiumUnlockedProvider)) {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => const AfdianUnlockDialog(),
+    );
+    if (ok != true || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已解锁追剧日历 ❤️')),
+    );
+  }
+  if (!context.mounted) return;
+  Navigator.of(context, rootNavigator: true).push(
+    MaterialPageRoute(builder: (_) => const CalendarScreen()),
+  );
+}
+
 /// 追剧日历（付费解锁，移动端 + 桌面端共用）。
 ///
 /// 数据来源在 Trakt / Bangumi 间切换：Trakt 给精确放送日期，Bangumi 给每周放送日。
@@ -21,6 +39,7 @@ class CalendarScreen extends ConsumerStatefulWidget {
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   late SyncService _source;
+  bool _onlyMine = true;
 
   @override
   void initState() {
@@ -41,10 +60,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       appBar: AppBar(
         title: const Text('追剧日历'),
         actions: [
+          TextButton.icon(
+            icon: Icon(_onlyMine ? Icons.person : Icons.public, size: 18),
+            label: Text(_onlyMine ? '只看我追的' : '整季全部'),
+            onPressed: () => setState(() => _onlyMine = !_onlyMine),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '刷新',
-            onPressed: () => ref.invalidate(calendarEntriesProvider(_source)),
+            onPressed: () => ref.invalidate(
+                calendarEntriesProvider((source: _source, onlyMine: _onlyMine))),
           ),
         ],
       ),
@@ -71,7 +96,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           ),
           Expanded(
             child: connected
-                ? _CalendarList(source: _source)
+                ? _CalendarList(source: _source, onlyMine: _onlyMine)
                 : _NotConnected(source: _source),
           ),
         ],
@@ -104,11 +129,13 @@ class _NotConnected extends StatelessWidget {
 
 class _CalendarList extends ConsumerWidget {
   final SyncService source;
-  const _CalendarList({required this.source});
+  final bool onlyMine;
+  const _CalendarList({required this.source, required this.onlyMine});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(calendarEntriesProvider(source));
+    final async =
+        ref.watch(calendarEntriesProvider((source: source, onlyMine: onlyMine)));
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('加载失败：$e')),

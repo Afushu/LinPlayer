@@ -169,20 +169,8 @@ class SettingsScreen extends ConsumerWidget {
       _openSubPage(context, const SyncSettingsScreen());
 
   /// 追剧日历入口：未解锁先弹爱发电订单校验，解锁后进日历页。
-  Future<void> _openCalendar(BuildContext context, WidgetRef ref) async {
-    if (!ref.read(premiumUnlockedProvider)) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => const AfdianUnlockDialog(),
-      );
-      if (ok != true || !context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已解锁追剧日历 ❤️')),
-      );
-    }
-    if (!context.mounted) return;
-    _openSubPage(context, const CalendarScreen());
-  }
+  void _openCalendar(BuildContext context, WidgetRef ref) =>
+      openCalendarGated(context, ref);
 
   void _showTranslationSettings(BuildContext context) =>
       _openSubPage(context, const TranslationSettingsScreen());

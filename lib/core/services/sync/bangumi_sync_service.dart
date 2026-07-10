@@ -238,12 +238,13 @@ class BangumiSyncService {
     }
   }
 
-  /// 拉取「追番日历」：我的在看动画 ∩ 当季放送表，按每周放送日（1=周一…7=周日）归组。
+  /// 拉取「追番日历」：当季放送表，按每周放送日（1=周一…7=周日）归组。
+  /// [onlyMine] 为 true 时只保留我在看的番，false 显示整季全部。
   ///
   /// ponytail: Bangumi 无「用户下一集放送时间」接口，这里用全站当季放送表
-  ///           (/calendar) 交集在看列表——只覆盖「当季正在放送」的番，已完结的
-  ///           在看番不会出现。够用；要精确到每一集，再逐条查 subject 的 episodes。
-  Future<List<CalendarEntry>> fetchWatchingCalendar() async {
+  ///           (/calendar)——只覆盖「当季正在放送」的番，已完结的在看番不会
+  ///           出现。够用；要精确到每一集，再逐条查 subject 的 episodes。
+  Future<List<CalendarEntry>> fetchAnimeCalendar({bool onlyMine = true}) async {
     final account = SyncSession.current(SyncService.bangumi);
     if (account == null) return const [];
     final valid = await ensureValid(account);
@@ -253,21 +254,23 @@ class BangumiSyncService {
       'User-Agent': kSyncUserAgent,
     };
     try {
-      // 1) 在看动画的 subject id 集合。
+      // 1) 只看我追的：先取在看动画的 subject id 集合。
       final watching = <int>{};
-      final col = await _dio.get(
-        '$_apiBase/v0/users/-/collections',
-        queryParameters: {'subject_type': 2, 'type': 3, 'limit': 50},
-        options: Options(headers: auth),
-      );
-      if ((col.statusCode ?? 0) == 200 && col.data is Map) {
-        for (final it in (col.data['data'] as List? ?? const [])) {
-          final id = it is Map ? (it['subject_id'] as num?)?.toInt() : null;
-          if (id != null) watching.add(id);
+      if (onlyMine) {
+        final col = await _dio.get(
+          '$_apiBase/v0/users/-/collections',
+          queryParameters: {'subject_type': 2, 'type': 3, 'limit': 50},
+          options: Options(headers: auth),
+        );
+        if ((col.statusCode ?? 0) == 200 && col.data is Map) {
+          for (final it in (col.data['data'] as List? ?? const [])) {
+            final id = it is Map ? (it['subject_id'] as num?)?.toInt() : null;
+            if (id != null) watching.add(id);
+          }
         }
+        if (watching.isEmpty) return const [];
       }
-      if (watching.isEmpty) return const [];
-      // 2) 当季放送表，过滤出在看的。
+      // 2) 当季放送表（onlyMine 时过滤出在看的）。
       final cal = await _dio.get('$_apiBase/calendar',
           options: Options(headers: {'User-Agent': kSyncUserAgent}));
       if ((cal.statusCode ?? 0) != 200 || cal.data is! List) return const [];
@@ -280,7 +283,8 @@ class BangumiSyncService {
         for (final item in (group['items'] as List? ?? const [])) {
           if (item is! Map) continue;
           final id = (item['id'] as num?)?.toInt();
-          if (id == null || !watching.contains(id)) continue;
+          if (id == null) continue;
+          if (onlyMine && !watching.contains(id)) continue;
           final nameCn = item['name_cn']?.toString();
           final title = (nameCn != null && nameCn.isNotEmpty)
               ? nameCn

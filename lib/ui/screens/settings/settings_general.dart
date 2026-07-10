@@ -103,6 +103,14 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
                 ref.read(rankingEnabledProvider.notifier).state = value,
           ),
           TdSwitchTile(
+            secondary: const Icon(Icons.calendar_month),
+            title: const Text('追剧日历入口'),
+            subtitle: const Text('开启后在底部导航栏显示「追剧日历」入口（付费功能，Trakt/Bangumi 放送日程）'),
+            value: ref.watch(calendarTabEnabledProvider),
+            onChanged: (value) =>
+                ref.read(calendarTabEnabledProvider.notifier).state = value,
+          ),
+          TdSwitchTile(
             title: const Text('使用视频背景'),
             subtitle: const Text('开启后在详情页使用预告片视频作为背景（如可用），关闭则使用封面图'),
             value: ref.watch(useVideoBackgroundProvider),

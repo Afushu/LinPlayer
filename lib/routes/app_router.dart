@@ -4,8 +4,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/providers/app_providers.dart';
+import '../core/providers/calendar_providers.dart';
 import '../core/providers/media_providers.dart';
 import '../core/providers/ranking_providers.dart';
+import '../ui/screens/calendar/calendar_screen.dart';
 import '../core/theme/app_motion.dart';
 import '../plugins/plugin_system.dart';
 import '../ui/screens/detail/media_detail_screen.dart';
@@ -541,6 +543,7 @@ class _FloatingTabBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final showRanking = ref.watch(rankingEnabledProvider);
+    final showCalendar = ref.watch(calendarTabEnabledProvider);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -573,10 +576,34 @@ class _FloatingTabBar extends ConsumerWidget {
               _buildPushItem(
                   context, Icons.leaderboard_rounded, '排行榜', '/rankings'),
             ],
+            if (showCalendar) ...[
+              const SizedBox(width: 24),
+              _buildTapItem(context, Icons.calendar_month, '追剧日历',
+                  () => openCalendarGated(context, ref)),
+            ],
             const SizedBox(width: 24),
             // 收藏移到首页顶栏后，设置分支索引由 2 变为 1。
             _buildNavItem(1, Icons.settings_rounded, '设置'),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// 回调型入口（点击执行 onTap，如付费门控的追剧日历）。样式同跳转型。
+  Widget _buildTapItem(
+      BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Tooltip(
+        message: label,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Icon(icon, size: 22, color: Colors.grey),
         ),
       ),
     );

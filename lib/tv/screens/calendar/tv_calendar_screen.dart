@@ -22,6 +22,7 @@ class TvCalendarScreen extends ConsumerStatefulWidget {
 
 class _TvCalendarScreenState extends ConsumerState<TvCalendarScreen> {
   late SyncService _source;
+  bool _onlyMine = true;
 
   @override
   void initState() {
@@ -57,6 +58,23 @@ class _TvCalendarScreenState extends ConsumerState<TvCalendarScreen> {
               _sourceChip(m, SyncService.trakt, 'Trakt'),
               SizedBox(width: m.spacingMd),
               _sourceChip(m, SyncService.bangumi, 'Bangumi'),
+              const Spacer(),
+              TvFocusable(
+                onSelect: () => setState(() => _onlyMine = !_onlyMine),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: m.spacingLg, vertical: m.spacingMd),
+                  decoration: BoxDecoration(
+                    color: TvDesignTokens.surface,
+                    borderRadius: BorderRadius.circular(m.posterRadius),
+                  ),
+                  child: Text(_onlyMine ? '只看我追的' : '整季全部',
+                      style: TextStyle(
+                        fontSize: m.fontSizeMd,
+                        color: TvDesignTokens.textPrimary,
+                      )),
+                ),
+              ),
             ]),
             SizedBox(height: m.spacingLg),
             Expanded(
@@ -95,7 +113,8 @@ class _TvCalendarScreenState extends ConsumerState<TvCalendarScreen> {
   }
 
   Widget _list(TvMetrics m) {
-    final async = ref.watch(calendarEntriesProvider(_source));
+    final async = ref
+        .watch(calendarEntriesProvider((source: _source, onlyMine: _onlyMine)));
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(
