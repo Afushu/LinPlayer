@@ -12,6 +12,7 @@ import '../../core/sources/source_kind.dart';
 import '../screens/settings/tv_settings_screen.dart';
 import '../screens/rankings/tv_rankings_screen.dart';
 import '../screens/settings/tv_cf_proxy_screen.dart';
+import '../screens/calendar/tv_calendar_screen.dart';
 import '../screens/settings/tv_plugin_screen.dart';
 import '../screens/settings/tv_lan_control_screen.dart';
 import '../screens/settings/tv_config_qr_screen.dart';
@@ -90,6 +91,11 @@ final tvRouter = GoRouter(
     GoRoute(
       path: '/tv/cf-proxy',
       builder: (context, state) => const TvCfProxyScreen(),
+    ),
+    // 追剧日历（付费解锁，独立页面）
+    GoRoute(
+      path: '/tv/calendar',
+      builder: (context, state) => const TvCalendarScreen(),
     ),
     // 插件面板（市场网络安装 + 已安装管理，遥控器友好）
     GoRoute(

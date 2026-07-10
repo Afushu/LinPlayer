@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../app_logger.dart';
+import 'calendar_models.dart';
 import 'obfuscated_secrets.dart';
 import 'sync_config.dart';
 import 'sync_models.dart';
@@ -234,6 +235,77 @@ class BangumiSyncService {
     } catch (e) {
       _logger.w('BangumiSync', '更新单集状态异常: $e');
       return false;
+    }
+  }
+
+  /// 拉取「追番日历」：我的在看动画 ∩ 当季放送表，按每周放送日（1=周一…7=周日）归组。
+  ///
+  /// ponytail: Bangumi 无「用户下一集放送时间」接口，这里用全站当季放送表
+  ///           (/calendar) 交集在看列表——只覆盖「当季正在放送」的番，已完结的
+  ///           在看番不会出现。够用；要精确到每一集，再逐条查 subject 的 episodes。
+  Future<List<CalendarEntry>> fetchWatchingCalendar() async {
+    final account = SyncSession.current(SyncService.bangumi);
+    if (account == null) return const [];
+    final valid = await ensureValid(account);
+    if (valid == null) return const [];
+    final auth = {
+      'Authorization': 'Bearer ${valid.accessToken}',
+      'User-Agent': kSyncUserAgent,
+    };
+    try {
+      // 1) 在看动画的 subject id 集合。
+      final watching = <int>{};
+      final col = await _dio.get(
+        '$_apiBase/v0/users/-/collections',
+        queryParameters: {'subject_type': 2, 'type': 3, 'limit': 50},
+        options: Options(headers: auth),
+      );
+      if ((col.statusCode ?? 0) == 200 && col.data is Map) {
+        for (final it in (col.data['data'] as List? ?? const [])) {
+          final id = it is Map ? (it['subject_id'] as num?)?.toInt() : null;
+          if (id != null) watching.add(id);
+        }
+      }
+      if (watching.isEmpty) return const [];
+      // 2) 当季放送表，过滤出在看的。
+      final cal = await _dio.get('$_apiBase/calendar',
+          options: Options(headers: {'User-Agent': kSyncUserAgent}));
+      if ((cal.statusCode ?? 0) != 200 || cal.data is! List) return const [];
+      final out = <CalendarEntry>[];
+      for (final group in cal.data as List) {
+        if (group is! Map) continue;
+        final weekday = (group['weekday'] is Map)
+            ? (group['weekday']['id'] as num?)?.toInt()
+            : null;
+        for (final item in (group['items'] as List? ?? const [])) {
+          if (item is! Map) continue;
+          final id = (item['id'] as num?)?.toInt();
+          if (id == null || !watching.contains(id)) continue;
+          final nameCn = item['name_cn']?.toString();
+          final title = (nameCn != null && nameCn.isNotEmpty)
+              ? nameCn
+              : (item['name']?.toString() ?? '未知番剧');
+          final images = item['images'];
+          final img = images is Map
+              ? (images['common'] ?? images['medium'] ?? images['large'])
+                  ?.toString()
+              : null;
+          final rating = item['rating'] is Map
+              ? (item['rating']['score'] as num?)
+              : null;
+          out.add(CalendarEntry(
+            title: title,
+            subtitle: rating != null ? '评分 $rating' : null,
+            weekday: weekday,
+            imageUrl: img,
+            source: SyncService.bangumi,
+          ));
+        }
+      }
+      return out;
+    } catch (e) {
+      _logger.w('BangumiSync', '追番日历异常: $e');
+      return const [];
     }
   }
 }

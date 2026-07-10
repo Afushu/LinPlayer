@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../app_logger.dart';
+import 'calendar_models.dart';
 import 'obfuscated_secrets.dart';
 import 'sync_config.dart';
 import 'sync_models.dart';
@@ -271,6 +272,66 @@ class TraktSyncService {
     } catch (e) {
       _logger.w('TraktSync', 'scrobble ${action.name} 异常: $e');
       return false;
+    }
+  }
+
+  /// 拉取「我的追剧日历」：从 [startOffsetDays] 天前起、共 [days] 天内我在追剧集的放送。
+  /// 需已连接 Trakt；未连接/失败返回空列表。
+  Future<List<CalendarEntry>> fetchShowsCalendar({
+    int startOffsetDays = 3,
+    int days = 21,
+  }) async {
+    final account = SyncSession.current(SyncService.trakt);
+    if (account == null) return const [];
+    final valid = await ensureValid(account);
+    if (valid == null) return const [];
+    final start = DateTime.now().subtract(Duration(days: startOffsetDays));
+    final startStr = '${start.year.toString().padLeft(4, '0')}-'
+        '${start.month.toString().padLeft(2, '0')}-'
+        '${start.day.toString().padLeft(2, '0')}';
+    try {
+      final resp = await _dio.get(
+        '/calendars/my/shows/$startStr/$days',
+        options: Options(headers: _authHeaders(valid.accessToken)),
+      );
+      if ((resp.statusCode ?? 0) != 200 || resp.data is! List) {
+        _logger.w('TraktSync', '追剧日历失败: HTTP ${resp.statusCode}');
+        return const [];
+      }
+      final out = <CalendarEntry>[];
+      for (final raw in resp.data as List) {
+        if (raw is! Map) continue;
+        final show = raw['show'];
+        final ep = raw['episode'];
+        final title =
+            (show is Map ? show['title']?.toString() : null) ?? '未知剧集';
+        final airedRaw = raw['first_aired']?.toString();
+        final aired =
+            airedRaw != null ? DateTime.tryParse(airedRaw)?.toLocal() : null;
+        String? sub;
+        if (ep is Map) {
+          final s = (ep['season'] as num?)?.toInt();
+          final n = (ep['number'] as num?)?.toInt();
+          final epTitle = ep['title']?.toString();
+          final code = (s != null && n != null)
+              ? 'S${s.toString().padLeft(2, '0')}E${n.toString().padLeft(2, '0')}'
+              : null;
+          final parts = [code, epTitle]
+              .where((e) => e != null && e.isNotEmpty)
+              .join(' · ');
+          sub = parts.isEmpty ? null : parts;
+        }
+        out.add(CalendarEntry(
+          title: title,
+          subtitle: sub,
+          airDate: aired,
+          source: SyncService.trakt,
+        ));
+      }
+      return out;
+    } catch (e) {
+      _logger.w('TraktSync', '追剧日历异常: $e');
+      return const [];
     }
   }
 }

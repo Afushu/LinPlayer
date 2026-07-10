@@ -4,6 +4,7 @@ import 'app_preferences.dart';
 import '../api/api_interfaces.dart' show MediaItem;
 import '../api/danmaku/danmaku_service.dart';
 import '../services/sync/bangumi_sync_service.dart';
+import '../services/sync/calendar_models.dart';
 import '../services/sync/sync_models.dart';
 import '../services/sync/sync_scrobble_service.dart';
 import '../services/sync/sync_secure_store.dart';
@@ -151,6 +152,18 @@ class SyncController extends StateNotifier<SyncState> {
       seriesProviderIds: seriesProviderIds,
       dandanplay: dandanplay,
     );
+  }
+
+  // ---- 追剧日历 ----
+
+  /// 按来源拉取追剧日历；未连接对应服务时返回空列表。
+  Future<List<CalendarEntry>> fetchCalendar(SyncService source) {
+    switch (source) {
+      case SyncService.trakt:
+        return trakt.fetchShowsCalendar();
+      case SyncService.bangumi:
+        return bangumi.fetchWatchingCalendar();
+    }
   }
 
   // ---- 断开连接 ----

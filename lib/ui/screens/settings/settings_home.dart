@@ -84,6 +84,14 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => _showSyncSettings(context),
           ),
           _SettingsCard(
+            icon: Icons.calendar_month,
+            title: '追剧日历',
+            subtitle: ref.watch(premiumUnlockedProvider)
+                ? '已解锁 · Trakt / Bangumi 放送日程'
+                : '赞助解锁 · 追踪 Trakt / Bangumi 放送日程',
+            onTap: () => _openCalendar(context, ref),
+          ),
+          _SettingsCard(
             icon: Icons.extension,
             title: '插件',
             subtitle: '安装、启用/禁用第三方插件',
@@ -159,6 +167,22 @@ class SettingsScreen extends ConsumerWidget {
 
   void _showSyncSettings(BuildContext context) =>
       _openSubPage(context, const SyncSettingsScreen());
+
+  /// 追剧日历入口：未解锁先弹爱发电订单校验，解锁后进日历页。
+  Future<void> _openCalendar(BuildContext context, WidgetRef ref) async {
+    if (!ref.read(premiumUnlockedProvider)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => const AfdianUnlockDialog(),
+      );
+      if (ok != true || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已解锁追剧日历 ❤️')),
+      );
+    }
+    if (!context.mounted) return;
+    _openSubPage(context, const CalendarScreen());
+  }
 
   void _showTranslationSettings(BuildContext context) =>
       _openSubPage(context, const TranslationSettingsScreen());

@@ -2,9 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/afdian_providers.dart';
 import '../../../core/providers/playback_providers.dart';
 import '../../../core/providers/sync_providers.dart';
+import '../calendar/tv_calendar_screen.dart';
 import '../../../core/providers/watch_history_providers.dart';
 import '../../../core/services/sync/sync_models.dart';
 import '../../../core/services/watch_history/watch_history_writeback_service.dart';
@@ -104,8 +107,37 @@ class TvSyncSettings extends ConsumerWidget {
           account: state.bangumi,
           hint: '动画/番剧追踪（bgm.tv）',
         ),
+        SizedBox(height: m.spacingXl),
+        Text(
+          '追剧日历',
+          style: TextStyle(
+            fontSize: m.fontSizeXxl,
+            color: TvDesignTokens.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: m.spacingLg),
+        _action(
+          context,
+          m,
+          title: 'Trakt / Bangumi 放送日程',
+          value: ref.watch(premiumUnlockedProvider) ? '已解锁' : '赞助解锁',
+          onSelect: () => _openCalendar(context, ref),
+        ),
       ],
     );
+  }
+
+  /// 追剧日历入口：未解锁先弹爱发电订单校验，解锁后进日历页。
+  Future<void> _openCalendar(BuildContext context, WidgetRef ref) async {
+    if (!ref.read(premiumUnlockedProvider)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => const TvAfdianUnlockPanel(),
+      );
+      if (ok != true || !context.mounted) return;
+    }
+    if (context.mounted) context.push('/tv/calendar');
   }
 
   Widget _item(

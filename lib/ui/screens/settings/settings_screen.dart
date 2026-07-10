@@ -39,6 +39,8 @@ import '../../../core/services/watch_history/watch_history_writeback_service.dar
 import '../../widgets/common/app_update_gate.dart';
 import '../../../plugins/ui/plugin_management_screen.dart';
 import '../server/server_list_screen.dart';
+import '../calendar/calendar_screen.dart';
+import '../../../core/providers/afdian_providers.dart';
 import 'config_migration_screen.dart';
 import 'wallpaper_crop_screen.dart';
 
