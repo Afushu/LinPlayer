@@ -13,6 +13,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/episode_aggregation_provider.dart';
 import '../../../core/providers/update_providers.dart';
 import '../../../core/services/app_logger.dart';
+import '../../../core/services/update/app_update_service.dart';
 import '../../../core/services/font_service.dart';
 import '../../../ui/widgets/common/app_update_gate.dart';
 import '../../../core/services/translation/translation_engine.dart';
@@ -880,9 +881,15 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
   Future<void> _checkUpdateTv() async {
     TvToast.show(context, '正在检查更新…');
     final channel = ref.read(updateChannelProvider);
-    final info = await ref.read(appUpdateServiceProvider).checkForUpdate(
-          includePrerelease: channel == UpdateChannel.prerelease,
-        );
+    final UpdateInfo? info;
+    try {
+      info = await ref.read(appUpdateServiceProvider).checkForUpdate(
+            includePrerelease: channel == UpdateChannel.prerelease,
+          );
+    } catch (_) {
+      if (mounted) TvToast.show(context, '检查更新失败，请稍后重试');
+      return;
+    }
     if (!mounted) return;
     if (info == null) {
       TvToast.show(context, '已是最新版本（$kAppVersion）');

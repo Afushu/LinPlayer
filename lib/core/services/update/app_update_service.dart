@@ -92,8 +92,10 @@ class AppUpdateService {
       _logger.i(_tag, '已是最新: 当前 $kCurrentAppVersion, 远端 ${info.tag}');
       return null;
     } catch (e) {
+      // 网络/限流等失败向上抛，调用方据此区分「检查失败」与「已是最新」
+      // （二者都返回 null 会让用户误以为已是最新）。null 严格表示「无更新」。
       _logger.w(_tag, '检查更新失败: $e');
-      return null;
+      rethrow;
     }
   }
 

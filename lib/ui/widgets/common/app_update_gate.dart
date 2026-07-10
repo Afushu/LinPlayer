@@ -46,9 +46,14 @@ class _AppUpdateGateState extends ConsumerState<AppUpdateGate> {
     if (!mounted) return;
     if (!ref.read(updateAutoCheckProvider)) return;
     final channel = ref.read(updateChannelProvider);
-    final info = await ref.read(appUpdateServiceProvider).checkForUpdate(
-          includePrerelease: channel == UpdateChannel.prerelease,
-        );
+    UpdateInfo? info;
+    try {
+      info = await ref.read(appUpdateServiceProvider).checkForUpdate(
+            includePrerelease: channel == UpdateChannel.prerelease,
+          );
+    } catch (_) {
+      return; // 自动检查失败静默，不打扰，等下次 24h 或手动检查
+    }
     if (!mounted || info == null) return;
     ref.read(availableUpdateProvider.notifier).state = info;
     if (!_dialogShown) {

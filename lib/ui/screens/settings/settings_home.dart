@@ -281,9 +281,18 @@ class SettingsScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(const SnackBar(content: Text('正在检查更新…')));
     final channel = ref.read(updateChannelProvider);
-    final info = await ref.read(appUpdateServiceProvider).checkForUpdate(
-          includePrerelease: channel == UpdateChannel.prerelease,
-        );
+    final UpdateInfo? info;
+    try {
+      info = await ref.read(appUpdateServiceProvider).checkForUpdate(
+            includePrerelease: channel == UpdateChannel.prerelease,
+          );
+    } catch (_) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('检查更新失败，请稍后重试')),
+      );
+      return;
+    }
     if (!context.mounted) return;
     if (info == null) {
       messenger.showSnackBar(
