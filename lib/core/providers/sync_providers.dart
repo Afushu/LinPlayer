@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_preferences.dart';
+import '../services/sync/sync_config.dart' show kBangumiMirrorPrefKey;
 import '../api/api_interfaces.dart' show MediaItem;
 import '../api/danmaku/danmaku_service.dart';
 import '../services/sync/bangumi_sync_service.dart';
@@ -50,6 +51,19 @@ class SyncState {
 }
 
 const String _bangumiRedirectPrefKey = 'bangumi_redirect_uri';
+
+/// Bangumi 国内加速反代开关（默认开）。开=走 bgmapi/bgmimg.anibt.net 反代，
+/// 关=直连官方 api.bgm.tv。生效点在 sync_config.dart 的 [bangumiApiBase]。
+final bangumiMirrorProvider =
+    StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
+  return PreferenceNotifier<bool>(
+    defaultValue: true,
+    readValue: (prefs) => prefs.getBool(kBangumiMirrorPrefKey),
+    writeValue: (prefs, value) async {
+      await prefs.setBool(kBangumiMirrorPrefKey, value);
+    },
+  );
+});
 
 class SyncController extends StateNotifier<SyncState> {
   SyncController(this._ref)

@@ -19,7 +19,8 @@ const String kDefaultBangumiRedirectUri =
 class BangumiSyncService {
   static final _logger = AppLogger();
   static const String _oauthBase = 'https://bgm.tv';
-  static const String _apiBase = 'https://api.bgm.tv';
+  // 国内加速反代开关生效点（默认反代，可在设置里切回官方）。见 sync_config.dart。
+  String get _apiBase => bangumiApiBase;
 
   final Dio _dio;
 
@@ -43,7 +44,8 @@ class BangumiSyncService {
         .map((e) =>
             '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}')
         .join('&');
-    return '$_oauthBase/oauth/authorize?$query';
+    // 授权页跟随反代开关（免梯子登录）；换 token 仍走 CF proxy / 官方，见 exchangeCode。
+    return '$bangumiAuthorizeBase/oauth/authorize?$query';
   }
 
   /// 用粘贴回来的授权码换取令牌。

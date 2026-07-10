@@ -122,6 +122,7 @@ $env:LINPLAYER_SKIP_LIBMPV_UPGRADE = "1"; flutter build windows
 - [弹弹play (DanDanPlay)](https://www.dandanplay.com/) — 弹幕与动漫排行榜数据
 - [TMDB](https://www.themoviedb.org/) — 影视排行榜数据
 - [Bangumi (bgm.tv)](https://bgm.tv/) — 番剧追番进度与收藏同步
+- [anibt](https://anibt.net) — 感谢站长为 LinPlayer 提供国内 Bangumi 反代（接口与图片加速），让追番同步开箱即用；亦是新生代 BT 磁力搜索站，资源丰沛、体验清爽，诚意推荐
 - [Trakt](https://trakt.tv/) — 影视观看记录同步（Scrobble）
 - [OpenList](https://github.com/OpenListTeam/OpenList) — 网盘聚合源
 

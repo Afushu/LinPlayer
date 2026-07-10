@@ -107,6 +107,16 @@ class TvSyncSettings extends ConsumerWidget {
           account: state.bangumi,
           hint: '动画/番剧追踪（bgm.tv）',
         ),
+        SizedBox(height: m.spacingLg),
+        _toggle(
+          context,
+          m,
+          title: 'Bangumi 国内加速',
+          subtitle: '通过反代访问 Bangumi 接口与图片,更快更稳;关则直连官方',
+          value: ref.watch(bangumiMirrorProvider),
+          onToggle: () => ref.read(bangumiMirrorProvider.notifier).state =
+              !ref.read(bangumiMirrorProvider),
+        ),
         SizedBox(height: m.spacingXl),
         Text(
           '追剧日历',

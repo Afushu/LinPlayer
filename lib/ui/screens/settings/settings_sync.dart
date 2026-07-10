@@ -34,6 +34,20 @@ class SyncSettingsScreen extends ConsumerWidget {
             icon: Icons.animation_outlined,
             description: '动画/番剧追踪（bgm.tv）',
           ),
+          const SizedBox(height: 12),
+          Card(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.rocket_launch_outlined, size: 28),
+              title: const Text('Bangumi 国内加速'),
+              subtitle: const Text(
+                '通过反代访问 Bangumi 接口与图片，国内更快更稳；关闭则直连官方 api.bgm.tv。',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: ref.watch(bangumiMirrorProvider),
+              onChanged: (v) =>
+                  ref.read(bangumiMirrorProvider.notifier).state = v,
+            ),
+          ),
         ],
       ),
     );

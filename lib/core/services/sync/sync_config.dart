@@ -1,3 +1,5 @@
+import '../../providers/app_preferences.dart';
+
 /// 同步后端代理配置（可选）。
 ///
 /// 部署 `oauth-proxy/`（Cloudflare Pages）后，把它的地址填到 [kSyncProxyBaseUrl]，
@@ -18,3 +20,37 @@ bool get kUseSyncProxy => kSyncProxyBaseUrl.isNotEmpty;
 /// 代理请求要附带的头（共享密钥）。
 Map<String, String> syncProxyHeaders() =>
     kSyncProxyKey.isEmpty ? const {} : {'X-LinPlayer-Key': kSyncProxyKey};
+
+// ============ Bangumi API 国内加速反代 ============
+//
+// 官方 api.bgm.tv / lain.bgm.tv 在国内经常慢或不通。anibt 提供了完整的 API + 图片
+// 反代（bgmapi 透传 /v0、/calendar、/search 及 Authorization；返回 JSON 里的封面
+// URL 已改写成图片反代 bgmimg，因此只切 API 基址即可，图片自动跟随）。
+// OAuth 授权仍走官方 bgm.tv（授权码经用户浏览器 + CF oauth-proxy 换取），不受影响。
+
+const String kBangumiApiOfficial = 'https://api.bgm.tv';
+const String kBangumiApiMirror = 'https://bgmapi.anibt.net';
+const String kBangumiOAuthOfficial = 'https://bgm.tv';
+
+/// 开关持久化键（与 bangumiMirrorProvider 共用）。
+const String kBangumiMirrorPrefKey = 'linplayer_bangumi_mirror';
+
+/// 反代开关是否打开（默认开）。prefs 未初始化时兜底为开。
+bool get _bangumiUseMirror {
+  try {
+    return AppPreferencesStore.instance.getBool(kBangumiMirrorPrefKey) ?? true;
+  } catch (_) {
+    return true;
+  }
+}
+
+/// 当前生效的 Bangumi API 基址：开=反代（默认），关=官方。
+/// 从 SharedPreferences 同步读取，服务层每次请求都取最新值。
+String get bangumiApiBase =>
+    _bangumiUseMirror ? kBangumiApiMirror : kBangumiApiOfficial;
+
+/// OAuth 授权页基址：开=反代（浏览器登录也免梯子），关=官方 bgm.tv。
+/// 仅用于授权页 URL（浏览器打开、不含 client_secret）；code 换 token 仍走 CF
+/// oauth-proxy 注入 secret，不会把 secret 发给第三方反代。
+String get bangumiAuthorizeBase =>
+    _bangumiUseMirror ? kBangumiApiMirror : kBangumiOAuthOfficial;

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../app_logger.dart';
+import 'sync_config.dart';
 import 'sync_models.dart';
 
 /// 解析结果：Bangumi 的 subject_id + 该集的 episode_id（真实 ep id，非集号）。
@@ -27,7 +28,8 @@ class _SubjectMatch {
 /// 离线数据集（7MB+），改为纯在线查询。
 class BangumiMatcher {
   static final _logger = AppLogger();
-  static const String _apiBase = 'https://api.bgm.tv';
+  // 国内加速反代开关生效点（见 sync_config.dart）。
+  String get _apiBase => bangumiApiBase;
   static const int _maxSequelHops = 10;
   static const int _episodesPageLimit = 200;
   static const int _dateMatchToleranceDays = 180;
