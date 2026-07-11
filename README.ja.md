@@ -46,27 +46,27 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/screenshots/pc-home.png" width="100%" alt="ホーム"><br><sub><b>ホーム</b></sub></td>
-    <td width="50%"><img src="docs/images/screenshots/pc-library.png" width="100%" alt="ライブラリ"><br><sub><b>ライブラリ</b></sub></td>
+    <td width="50%"><a href="docs/images/screenshots/pc-home.png" target="_blank"><img src="docs/images/screenshots/pc-home.png" width="100%" alt="ホーム"></a><br><sub><b>ホーム</b></sub></td>
+    <td width="50%"><a href="docs/images/screenshots/pc-library.png" target="_blank"><img src="docs/images/screenshots/pc-library.png" width="100%" alt="ライブラリ"></a><br><sub><b>ライブラリ</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-series-detail.png" width="100%" alt="シリーズ詳細"><br><sub><b>シリーズ詳細</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-movie-detail.png" width="100%" alt="映画詳細"><br><sub><b>映画詳細</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-series-detail.png" target="_blank"><img src="docs/images/screenshots/pc-series-detail.png" width="100%" alt="シリーズ詳細"></a><br><sub><b>シリーズ詳細</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-movie-detail.png" target="_blank"><img src="docs/images/screenshots/pc-movie-detail.png" width="100%" alt="映画詳細"></a><br><sub><b>映画詳細</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-rankings.png" width="100%" alt="ランキング"><br><sub><b>ランキング</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-search.png" width="100%" alt="検索"><br><sub><b>検索</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-rankings.png" target="_blank"><img src="docs/images/screenshots/pc-rankings.png" width="100%" alt="ランキング"></a><br><sub><b>ランキング</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-search.png" target="_blank"><img src="docs/images/screenshots/pc-search.png" width="100%" alt="検索"></a><br><sub><b>検索</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-favorites.png" width="100%" alt="お気に入り"><br><sub><b>お気に入り</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-settings.png" width="100%" alt="設定"><br><sub><b>設定</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-favorites.png" target="_blank"><img src="docs/images/screenshots/pc-favorites.png" width="100%" alt="お気に入り"></a><br><sub><b>お気に入り</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-settings.png" target="_blank"><img src="docs/images/screenshots/pc-settings.png" width="100%" alt="設定"></a><br><sub><b>設定</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-add-server-1.png" width="100%" alt="サーバー追加 1"><br><sub><b>サーバー追加 ①</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-add-server-2.png" width="100%" alt="サーバー追加 2"><br><sub><b>サーバー追加 ②</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-add-server-1.png" target="_blank"><img src="docs/images/screenshots/pc-add-server-1.png" width="100%" alt="サーバー追加 1"></a><br><sub><b>サーバー追加 ①</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-add-server-2.png" target="_blank"><img src="docs/images/screenshots/pc-add-server-2.png" width="100%" alt="サーバー追加 2"></a><br><sub><b>サーバー追加 ②</b></sub></td>
   </tr>
   <tr>
-    <td colspan="2" width="50%"><img src="docs/images/screenshots/pc-add-server-3.png" width="100%" alt="サーバー追加 3"><br><sub><b>サーバー追加 ③</b></sub></td>
+    <td colspan="2" width="50%"><a href="docs/images/screenshots/pc-add-server-3.png" target="_blank"><img src="docs/images/screenshots/pc-add-server-3.png" width="100%" alt="サーバー追加 3"></a><br><sub><b>サーバー追加 ③</b></sub></td>
   </tr>
 </table>
 
@@ -76,14 +76,14 @@
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/images/screenshots/mobile-home.jpg" width="100%" alt="ホーム"><br><sub><b>ホーム</b></sub></td>
-    <td width="33%"><img src="docs/images/screenshots/mobile-series-detail.jpg" width="100%" alt="シリーズ詳細"><br><sub><b>シリーズ詳細</b></sub></td>
-    <td width="33%"><img src="docs/images/screenshots/mobile-episode-detail.jpg" width="100%" alt="エピソード詳細"><br><sub><b>エピソード詳細</b></sub></td>
+    <td width="33%"><a href="docs/images/screenshots/mobile-home.jpg" target="_blank"><img src="docs/images/screenshots/mobile-home.jpg" width="100%" alt="ホーム"></a><br><sub><b>ホーム</b></sub></td>
+    <td width="33%"><a href="docs/images/screenshots/mobile-series-detail.jpg" target="_blank"><img src="docs/images/screenshots/mobile-series-detail.jpg" width="100%" alt="シリーズ詳細"></a><br><sub><b>シリーズ詳細</b></sub></td>
+    <td width="33%"><a href="docs/images/screenshots/mobile-episode-detail.jpg" target="_blank"><img src="docs/images/screenshots/mobile-episode-detail.jpg" width="100%" alt="エピソード詳細"></a><br><sub><b>エピソード詳細</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/mobile-movie-detail.jpg" width="100%" alt="映画詳細"><br><sub><b>映画詳細</b></sub></td>
-    <td><img src="docs/images/screenshots/mobile-rankings.jpg" width="100%" alt="ランキング"><br><sub><b>ランキング</b></sub></td>
-    <td><img src="docs/images/screenshots/mobile-settings.jpg" width="100%" alt="設定"><br><sub><b>設定</b></sub></td>
+    <td><a href="docs/images/screenshots/mobile-movie-detail.jpg" target="_blank"><img src="docs/images/screenshots/mobile-movie-detail.jpg" width="100%" alt="映画詳細"></a><br><sub><b>映画詳細</b></sub></td>
+    <td><a href="docs/images/screenshots/mobile-rankings.jpg" target="_blank"><img src="docs/images/screenshots/mobile-rankings.jpg" width="100%" alt="ランキング"></a><br><sub><b>ランキング</b></sub></td>
+    <td><a href="docs/images/screenshots/mobile-settings.jpg" target="_blank"><img src="docs/images/screenshots/mobile-settings.jpg" width="100%" alt="設定"></a><br><sub><b>設定</b></sub></td>
   </tr>
 </table>
 

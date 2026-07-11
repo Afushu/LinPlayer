@@ -46,27 +46,27 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/screenshots/pc-home.png" width="100%" alt="首页"><br><sub><b>首页</b></sub></td>
-    <td width="50%"><img src="docs/images/screenshots/pc-library.png" width="100%" alt="媒体库"><br><sub><b>媒体库</b></sub></td>
+    <td width="50%"><a href="docs/images/screenshots/pc-home.png" target="_blank"><img src="docs/images/screenshots/pc-home.png" width="100%" alt="首页"></a><br><sub><b>首页</b></sub></td>
+    <td width="50%"><a href="docs/images/screenshots/pc-library.png" target="_blank"><img src="docs/images/screenshots/pc-library.png" width="100%" alt="媒体库"></a><br><sub><b>媒体库</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-series-detail.png" width="100%" alt="剧集详情"><br><sub><b>剧集详情</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-movie-detail.png" width="100%" alt="电影详情"><br><sub><b>电影详情</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-series-detail.png" target="_blank"><img src="docs/images/screenshots/pc-series-detail.png" width="100%" alt="剧集详情"></a><br><sub><b>剧集详情</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-movie-detail.png" target="_blank"><img src="docs/images/screenshots/pc-movie-detail.png" width="100%" alt="电影详情"></a><br><sub><b>电影详情</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-rankings.png" width="100%" alt="排行榜"><br><sub><b>排行榜</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-search.png" width="100%" alt="搜索"><br><sub><b>搜索</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-rankings.png" target="_blank"><img src="docs/images/screenshots/pc-rankings.png" width="100%" alt="排行榜"></a><br><sub><b>排行榜</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-search.png" target="_blank"><img src="docs/images/screenshots/pc-search.png" width="100%" alt="搜索"></a><br><sub><b>搜索</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-favorites.png" width="100%" alt="收藏"><br><sub><b>收藏</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-settings.png" width="100%" alt="设置"><br><sub><b>设置</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-favorites.png" target="_blank"><img src="docs/images/screenshots/pc-favorites.png" width="100%" alt="收藏"></a><br><sub><b>收藏</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-settings.png" target="_blank"><img src="docs/images/screenshots/pc-settings.png" width="100%" alt="设置"></a><br><sub><b>设置</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-add-server-1.png" width="100%" alt="添加服务器 1"><br><sub><b>添加服务器 ①</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-add-server-2.png" width="100%" alt="添加服务器 2"><br><sub><b>添加服务器 ②</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-add-server-1.png" target="_blank"><img src="docs/images/screenshots/pc-add-server-1.png" width="100%" alt="添加服务器 1"></a><br><sub><b>添加服务器 ①</b></sub></td>
+    <td><a href="docs/images/screenshots/pc-add-server-2.png" target="_blank"><img src="docs/images/screenshots/pc-add-server-2.png" width="100%" alt="添加服务器 2"></a><br><sub><b>添加服务器 ②</b></sub></td>
   </tr>
   <tr>
-    <td colspan="2" width="50%"><img src="docs/images/screenshots/pc-add-server-3.png" width="100%" alt="添加服务器 3"><br><sub><b>添加服务器 ③</b></sub></td>
+    <td colspan="2" width="50%"><a href="docs/images/screenshots/pc-add-server-3.png" target="_blank"><img src="docs/images/screenshots/pc-add-server-3.png" width="100%" alt="添加服务器 3"></a><br><sub><b>添加服务器 ③</b></sub></td>
   </tr>
 </table>
 
@@ -76,14 +76,14 @@
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/images/screenshots/mobile-home.jpg" width="100%" alt="首页"><br><sub><b>首页</b></sub></td>
-    <td width="33%"><img src="docs/images/screenshots/mobile-series-detail.jpg" width="100%" alt="剧集详情"><br><sub><b>剧集详情</b></sub></td>
-    <td width="33%"><img src="docs/images/screenshots/mobile-episode-detail.jpg" width="100%" alt="集详情"><br><sub><b>集详情</b></sub></td>
+    <td width="33%"><a href="docs/images/screenshots/mobile-home.jpg" target="_blank"><img src="docs/images/screenshots/mobile-home.jpg" width="100%" alt="首页"></a><br><sub><b>首页</b></sub></td>
+    <td width="33%"><a href="docs/images/screenshots/mobile-series-detail.jpg" target="_blank"><img src="docs/images/screenshots/mobile-series-detail.jpg" width="100%" alt="剧集详情"></a><br><sub><b>剧集详情</b></sub></td>
+    <td width="33%"><a href="docs/images/screenshots/mobile-episode-detail.jpg" target="_blank"><img src="docs/images/screenshots/mobile-episode-detail.jpg" width="100%" alt="集详情"></a><br><sub><b>集详情</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/mobile-movie-detail.jpg" width="100%" alt="电影详情"><br><sub><b>电影详情</b></sub></td>
-    <td><img src="docs/images/screenshots/mobile-rankings.jpg" width="100%" alt="排行榜"><br><sub><b>排行榜</b></sub></td>
-    <td><img src="docs/images/screenshots/mobile-settings.jpg" width="100%" alt="设置"><br><sub><b>设置</b></sub></td>
+    <td><a href="docs/images/screenshots/mobile-movie-detail.jpg" target="_blank"><img src="docs/images/screenshots/mobile-movie-detail.jpg" width="100%" alt="电影详情"></a><br><sub><b>电影详情</b></sub></td>
+    <td><a href="docs/images/screenshots/mobile-rankings.jpg" target="_blank"><img src="docs/images/screenshots/mobile-rankings.jpg" width="100%" alt="排行榜"></a><br><sub><b>排行榜</b></sub></td>
+    <td><a href="docs/images/screenshots/mobile-settings.jpg" target="_blank"><img src="docs/images/screenshots/mobile-settings.jpg" width="100%" alt="设置"></a><br><sub><b>设置</b></sub></td>
   </tr>
 </table>
 
