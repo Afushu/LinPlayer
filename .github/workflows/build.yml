@@ -225,6 +225,7 @@ jobs:
           ls -lh "$ARM64_TARGET"
 
       - name: Upload debug symbols to Sentry
+        continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
@@ -400,6 +401,7 @@ jobs:
           ls -lh "$TV_APK_TARGET"
 
       - name: Upload debug symbols to Sentry
+        continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
@@ -500,6 +502,7 @@ jobs:
             --dart-define=TMDB_API_KEY_ENC="$TMDB_ENC"
 
       - name: Upload debug symbols to Sentry
+        continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
@@ -717,6 +720,7 @@ jobs:
             --dart-define=TMDB_API_KEY_ENC="$tmdbEnc"
 
       - name: Upload debug symbols to Sentry
+        continue-on-error: true
         shell: pwsh
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -892,6 +896,7 @@ jobs:
             --dart-define=TMDB_API_KEY_ENC="$TMDB_ENC"
 
       - name: Upload debug symbols to Sentry
+        continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
@@ -1012,6 +1017,7 @@ jobs:
             --dart-define=TMDB_API_KEY_ENC="$TMDB_ENC"
 
       - name: Upload debug symbols to Sentry
+        continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
