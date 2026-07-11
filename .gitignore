@@ -178,3 +178,4 @@ Swagger UI_files/
 
 # 运行时日志导出文件
 linplayer_log_*.txt
+.omo/
