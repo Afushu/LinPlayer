@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">简体中文</a> ·
+  <a href="../README.md">简体中文</a> ·
   <b>English</b> ·
   <a href="README.ja.md">日本語</a>
 </p>
@@ -46,27 +46,27 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/screenshots/pc-home.png" width="100%" alt="Home"><br><sub><b>Home</b></sub></td>
-    <td width="50%"><img src="docs/images/screenshots/pc-library.png" width="100%" alt="Library"><br><sub><b>Library</b></sub></td>
+    <td width="50%"><img src="images/screenshots/pc-home.png" width="100%" alt="Home"><br><sub><b>Home</b></sub></td>
+    <td width="50%"><img src="images/screenshots/pc-library.png" width="100%" alt="Library"><br><sub><b>Library</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-series-detail.png" width="100%" alt="Series detail"><br><sub><b>Series Detail</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-movie-detail.png" width="100%" alt="Movie detail"><br><sub><b>Movie Detail</b></sub></td>
+    <td><img src="images/screenshots/pc-series-detail.png" width="100%" alt="Series detail"><br><sub><b>Series Detail</b></sub></td>
+    <td><img src="images/screenshots/pc-movie-detail.png" width="100%" alt="Movie detail"><br><sub><b>Movie Detail</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-rankings.png" width="100%" alt="Rankings"><br><sub><b>Rankings</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-search.png" width="100%" alt="Search"><br><sub><b>Search</b></sub></td>
+    <td><img src="images/screenshots/pc-rankings.png" width="100%" alt="Rankings"><br><sub><b>Rankings</b></sub></td>
+    <td><img src="images/screenshots/pc-search.png" width="100%" alt="Search"><br><sub><b>Search</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-favorites.png" width="100%" alt="Favorites"><br><sub><b>Favorites</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-settings.png" width="100%" alt="Settings"><br><sub><b>Settings</b></sub></td>
+    <td><img src="images/screenshots/pc-favorites.png" width="100%" alt="Favorites"><br><sub><b>Favorites</b></sub></td>
+    <td><img src="images/screenshots/pc-settings.png" width="100%" alt="Settings"><br><sub><b>Settings</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/pc-add-server-1.png" width="100%" alt="Add server 1"><br><sub><b>Add Server ①</b></sub></td>
-    <td><img src="docs/images/screenshots/pc-add-server-2.png" width="100%" alt="Add server 2"><br><sub><b>Add Server ②</b></sub></td>
+    <td><img src="images/screenshots/pc-add-server-1.png" width="100%" alt="Add server 1"><br><sub><b>Add Server ①</b></sub></td>
+    <td><img src="images/screenshots/pc-add-server-2.png" width="100%" alt="Add server 2"><br><sub><b>Add Server ②</b></sub></td>
   </tr>
   <tr>
-    <td colspan="2" width="50%"><img src="docs/images/screenshots/pc-add-server-3.png" width="100%" alt="Add server 3"><br><sub><b>Add Server ③</b></sub></td>
+    <td colspan="2" width="50%"><img src="images/screenshots/pc-add-server-3.png" width="100%" alt="Add server 3"><br><sub><b>Add Server ③</b></sub></td>
   </tr>
 </table>
 
@@ -76,24 +76,24 @@
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/images/screenshots/mobile-home.jpg" width="100%" alt="Home"><br><sub><b>Home</b></sub></td>
-    <td width="33%"><img src="docs/images/screenshots/mobile-series-detail.jpg" width="100%" alt="Series detail"><br><sub><b>Series Detail</b></sub></td>
-    <td width="33%"><img src="docs/images/screenshots/mobile-episode-detail.jpg" width="100%" alt="Episode detail"><br><sub><b>Episode Detail</b></sub></td>
+    <td width="33%"><img src="images/screenshots/mobile-home.jpg" width="100%" alt="Home"><br><sub><b>Home</b></sub></td>
+    <td width="33%"><img src="images/screenshots/mobile-series-detail.jpg" width="100%" alt="Series detail"><br><sub><b>Series Detail</b></sub></td>
+    <td width="33%"><img src="images/screenshots/mobile-episode-detail.jpg" width="100%" alt="Episode detail"><br><sub><b>Episode Detail</b></sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshots/mobile-movie-detail.jpg" width="100%" alt="Movie detail"><br><sub><b>Movie Detail</b></sub></td>
-    <td><img src="docs/images/screenshots/mobile-rankings.jpg" width="100%" alt="Rankings"><br><sub><b>Rankings</b></sub></td>
-    <td><img src="docs/images/screenshots/mobile-settings.jpg" width="100%" alt="Settings"><br><sub><b>Settings</b></sub></td>
+    <td><img src="images/screenshots/mobile-movie-detail.jpg" width="100%" alt="Movie detail"><br><sub><b>Movie Detail</b></sub></td>
+    <td><img src="images/screenshots/mobile-rankings.jpg" width="100%" alt="Rankings"><br><sub><b>Rankings</b></sub></td>
+    <td><img src="images/screenshots/mobile-settings.jpg" width="100%" alt="Settings"><br><sub><b>Settings</b></sub></td>
   </tr>
 </table>
 
 ## Development & Tech
 
-Player-core comparison, local development & builds, and the tech stack — see the **[development docs →](docs/DEVELOPMENT.md)**.
+Player-core comparison, local development & builds, and the tech stack — see the **[development docs →](DEVELOPMENT.md)**.
 
 ## License
 
-[LICENSE](LICENSE)
+[LICENSE](../LICENSE)
 
 ## Acknowledgements
 
