@@ -104,7 +104,10 @@ const String kPluginBootstrapJs = r'''
     showDialog: function (opts) { return __callHost('ui', 'showDialog', [opts || {}]); },
     // 弹出一个表单（字段 schema），resolve 为 {字段名: 值} 或 null（取消）
     showForm: function (schema) { return __callHost('ui', 'showForm', [schema || {}]); },
-    openPage: function (pageId, params) { return __callHost('ui', 'openPage', [String(pageId), params || {}]); }
+    openPage: function (pageId, params) { return __callHost('ui', 'openPage', [String(pageId), params || {}]); },
+    showProgress: function (opts) { return __callHost('ui', 'showProgress', [opts || {}]); },
+    updateProgress: function (id, opts) { return __callHost('ui', 'updateProgress', [String(id), opts || {}]); },
+    closeProgress: function (id) { return __callHost('ui', 'closeProgress', [String(id)]); }
   };
 
   // ---- ctx.emby ----

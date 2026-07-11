@@ -145,6 +145,74 @@ class PluginUiHost {
       BuildContext ctx, WidgetBuilder builder) {
     return showDialog<T>(context: ctx, builder: builder);
   }
+
+  // ---- 进度面板（可实时更新的模态对话框，用于测速这类过程可视化）----
+  static int _progressSeq = 0;
+  static final Map<String, ValueNotifier<Map>> _progressData = {};
+  static final Map<String, BuildContext> _progressCtx = {};
+
+  /// 显示一个进度面板，返回句柄 id；后续用 [updateProgress]/[closeProgress] 驱动。
+  /// opts: { title, message, percent(0-100，缺省=不定态) }
+  static String showProgress(Map opts) {
+    final id = 'prog${_progressSeq++}';
+    final ctx = _context;
+    if (ctx == null) return id;
+    final notifier = ValueNotifier<Map>(Map<String, dynamic>.from(opts));
+    _progressData[id] = notifier;
+    showDialog<void>(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (dctx) {
+        _progressCtx[id] = dctx;
+        return ValueListenableBuilder<Map>(
+          valueListenable: notifier,
+          builder: (_, v, __) => _buildProgressDialog(v),
+        );
+      },
+    ).then((_) {
+      _progressData.remove(id);
+      _progressCtx.remove(id);
+    });
+    return id;
+  }
+
+  static void updateProgress(String id, Map opts) {
+    final n = _progressData[id];
+    if (n == null) return;
+    n.value = {...n.value, ...Map<String, dynamic>.from(opts)};
+  }
+
+  static void closeProgress(String id) {
+    final c = _progressCtx.remove(id);
+    _progressData.remove(id);
+    if (c != null && Navigator.of(c).canPop()) Navigator.of(c).pop();
+  }
+
+  static Widget _buildProgressDialog(Map v) {
+    final title = '${v['title'] ?? '请稍候'}';
+    final message = '${v['message'] ?? ''}';
+    final p = v['percent'];
+    final double? percent =
+        (p is num) ? (p.clamp(0, 100) / 100).toDouble() : null;
+    return AlertDialog(
+      title: Text(title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(value: percent, minHeight: 8),
+          ),
+          if (message.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Text(message, style: const TextStyle(height: 1.4)),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PluginFormDialog extends StatefulWidget {
@@ -159,6 +227,18 @@ class _PluginFormDialog extends StatefulWidget {
 class _PluginFormDialogState extends State<_PluginFormDialog> {
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, bool> _switches = {};
+  final Map<String, int> _selectIdx = {};
+
+  static List<Map> _optionsOf(Map f) {
+    final raw = f['options'];
+    final out = <Map>[];
+    if (raw is List) {
+      for (final o in raw) {
+        if (o is Map) out.add(o);
+      }
+    }
+    return out;
+  }
 
   @override
   void initState() {
@@ -168,6 +248,17 @@ class _PluginFormDialogState extends State<_PluginFormDialog> {
       final type = '${f['type'] ?? 'text'}';
       if (type == 'switch') {
         _switches[key] = f['default'] == true;
+      } else if (type == 'select') {
+        final opts = _optionsOf(f);
+        var idx = 0;
+        final def = f['default'];
+        for (var i = 0; i < opts.length; i++) {
+          if ('${opts[i]['value']}' == '$def') {
+            idx = i;
+            break;
+          }
+        }
+        _selectIdx[key] = idx;
       } else {
         _controllers[key] =
             TextEditingController(text: f['default'] == null ? '' : '${f['default']}');
@@ -190,6 +281,10 @@ class _PluginFormDialogState extends State<_PluginFormDialog> {
       final type = '${f['type'] ?? 'text'}';
       if (type == 'switch') {
         out[key] = _switches[key] ?? false;
+      } else if (type == 'select') {
+        final opts = _optionsOf(f);
+        final i = _selectIdx[key] ?? 0;
+        out[key] = (i >= 0 && i < opts.length) ? opts[i]['value'] : null;
       } else if (type == 'number') {
         out[key] = num.tryParse(_controllers[key]?.text.trim() ?? '');
       } else {
@@ -234,6 +329,31 @@ class _PluginFormDialogState extends State<_PluginFormDialog> {
         title: Text(label),
         value: _switches[key] ?? false,
         onChanged: (v) => setState(() => _switches[key] = v),
+      );
+    }
+    if (type == 'select') {
+      final opts = _optionsOf(f);
+      final i = _selectIdx[key] ?? 0;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: DropdownButtonFormField<int>(
+          initialValue: (i >= 0 && i < opts.length) ? i : 0,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: f['hint'] == null ? null : '${f['hint']}',
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            for (var j = 0; j < opts.length; j++)
+              DropdownMenuItem<int>(
+                value: j,
+                child: Text('${opts[j]['label'] ?? opts[j]['value']}',
+                    overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (v) => setState(() => _selectIdx[key] = v ?? 0),
+        ),
       );
     }
     return Padding(

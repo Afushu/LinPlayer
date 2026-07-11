@@ -320,6 +320,18 @@ class PluginContextBridge {
           args.isNotEmpty ? '${args[0]}' : '',
           (args.length > 1 && args[1] is Map) ? args[1] as Map : const {},
         );
+      case 'showProgress':
+        return PluginUiHost.showProgress(
+            (args.isNotEmpty && args[0] is Map) ? args[0] as Map : {});
+      case 'updateProgress':
+        PluginUiHost.updateProgress(
+          args.isNotEmpty ? '${args[0]}' : '',
+          (args.length > 1 && args[1] is Map) ? args[1] as Map : const {},
+        );
+        return null;
+      case 'closeProgress':
+        PluginUiHost.closeProgress(args.isNotEmpty ? '${args[0]}' : '');
+        return null;
       default:
         throw Exception('未知 ui 方法: $method');
     }
