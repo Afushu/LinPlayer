@@ -134,13 +134,23 @@ class PluginContextBridge {
       validateStatus: (_) => true,
     ));
 
+    // discardBody：按流丢弃、只统计字节数，不把响应体读进 isolate（64MB 上限）。
+    // 用于测速这类“只关心传了多少、多快”的大文件下载。post 的 opts 在 args[2]，get/delete 在 args[1]。
+    final reqOpts = (method == 'post')
+        ? (args.length > 2 && args[2] is Map ? args[2] as Map : const {})
+        : (args.length > 1 && args[1] is Map ? args[1] as Map : const {});
+    final discardBody = reqOpts['discardBody'] == true;
+
     Options buildOptions(Map opts) {
       final headers = <String, dynamic>{};
       final h = opts['headers'];
       if (h is Map) {
         h.forEach((k, v) => headers['$k'] = '$v');
       }
-      return Options(headers: headers);
+      return Options(
+        headers: headers,
+        responseType: discardBody ? ResponseType.stream : null,
+      );
     }
 
     Response response;
@@ -158,6 +168,13 @@ class PluginContextBridge {
         data: _encodeBody(body, opts),
         options: buildOptions(opts),
       );
+    } else if (method == 'delete') {
+      final opts = args.length > 1 && args[1] is Map ? args[1] as Map : {};
+      response = await dio.deleteUri(
+        uri.replace(queryParameters: _mergeQuery(uri, opts['query'])),
+        data: opts['body'] != null ? _encodeBody(opts['body'], opts) : null,
+        options: buildOptions(opts),
+      );
     } else {
       throw Exception('不支持的 http 方法: $method');
     }
@@ -167,6 +184,18 @@ class PluginContextBridge {
     final finalHost = response.realUri.host;
     if (!httpAllowedHosts.contains(finalHost)) {
       throw Exception('请求经重定向到了白名单外主机: $finalHost');
+    }
+
+    if (discardBody) {
+      var bytes = 0;
+      await for (final chunk in (response.data as ResponseBody).stream) {
+        bytes += chunk.length;
+      }
+      return {
+        'status': response.statusCode,
+        'headers': response.headers.map,
+        'bytes': bytes,
+      };
     }
 
     return {

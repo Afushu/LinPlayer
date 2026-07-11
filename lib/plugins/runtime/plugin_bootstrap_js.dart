@@ -66,6 +66,9 @@ const String kPluginBootstrapJs = r'''
     },
     post: function (url, body, options) {
       return __callHost('http', 'post', [url, body, options || {}]);
+    },
+    delete: function (url, options) {
+      return __callHost('http', 'delete', [url, options || {}]);
     }
   };
 
