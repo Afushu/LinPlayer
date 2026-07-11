@@ -46,27 +46,27 @@
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/images/screenshots/pc-home.png" target="_blank"><img src="docs/images/screenshots/pc-home.png" width="100%" alt="Home"></a><br><sub><b>Home</b></sub></td>
-    <td width="50%"><a href="docs/images/screenshots/pc-library.png" target="_blank"><img src="docs/images/screenshots/pc-library.png" width="100%" alt="Library"></a><br><sub><b>Library</b></sub></td>
+    <td width="50%"><img src="docs/images/screenshots/pc-home.png" width="100%" alt="Home"><br><sub><b>Home</b></sub></td>
+    <td width="50%"><img src="docs/images/screenshots/pc-library.png" width="100%" alt="Library"><br><sub><b>Library</b></sub></td>
   </tr>
   <tr>
-    <td><a href="docs/images/screenshots/pc-series-detail.png" target="_blank"><img src="docs/images/screenshots/pc-series-detail.png" width="100%" alt="Series detail"></a><br><sub><b>Series Detail</b></sub></td>
-    <td><a href="docs/images/screenshots/pc-movie-detail.png" target="_blank"><img src="docs/images/screenshots/pc-movie-detail.png" width="100%" alt="Movie detail"></a><br><sub><b>Movie Detail</b></sub></td>
+    <td><img src="docs/images/screenshots/pc-series-detail.png" width="100%" alt="Series detail"><br><sub><b>Series Detail</b></sub></td>
+    <td><img src="docs/images/screenshots/pc-movie-detail.png" width="100%" alt="Movie detail"><br><sub><b>Movie Detail</b></sub></td>
   </tr>
   <tr>
-    <td><a href="docs/images/screenshots/pc-rankings.png" target="_blank"><img src="docs/images/screenshots/pc-rankings.png" width="100%" alt="Rankings"></a><br><sub><b>Rankings</b></sub></td>
-    <td><a href="docs/images/screenshots/pc-search.png" target="_blank"><img src="docs/images/screenshots/pc-search.png" width="100%" alt="Search"></a><br><sub><b>Search</b></sub></td>
+    <td><img src="docs/images/screenshots/pc-rankings.png" width="100%" alt="Rankings"><br><sub><b>Rankings</b></sub></td>
+    <td><img src="docs/images/screenshots/pc-search.png" width="100%" alt="Search"><br><sub><b>Search</b></sub></td>
   </tr>
   <tr>
-    <td><a href="docs/images/screenshots/pc-favorites.png" target="_blank"><img src="docs/images/screenshots/pc-favorites.png" width="100%" alt="Favorites"></a><br><sub><b>Favorites</b></sub></td>
-    <td><a href="docs/images/screenshots/pc-settings.png" target="_blank"><img src="docs/images/screenshots/pc-settings.png" width="100%" alt="Settings"></a><br><sub><b>Settings</b></sub></td>
+    <td><img src="docs/images/screenshots/pc-favorites.png" width="100%" alt="Favorites"><br><sub><b>Favorites</b></sub></td>
+    <td><img src="docs/images/screenshots/pc-settings.png" width="100%" alt="Settings"><br><sub><b>Settings</b></sub></td>
   </tr>
   <tr>
-    <td><a href="docs/images/screenshots/pc-add-server-1.png" target="_blank"><img src="docs/images/screenshots/pc-add-server-1.png" width="100%" alt="Add server 1"></a><br><sub><b>Add Server ①</b></sub></td>
-    <td><a href="docs/images/screenshots/pc-add-server-2.png" target="_blank"><img src="docs/images/screenshots/pc-add-server-2.png" width="100%" alt="Add server 2"></a><br><sub><b>Add Server ②</b></sub></td>
+    <td><img src="docs/images/screenshots/pc-add-server-1.png" width="100%" alt="Add server 1"><br><sub><b>Add Server ①</b></sub></td>
+    <td><img src="docs/images/screenshots/pc-add-server-2.png" width="100%" alt="Add server 2"><br><sub><b>Add Server ②</b></sub></td>
   </tr>
   <tr>
-    <td colspan="2" width="50%"><a href="docs/images/screenshots/pc-add-server-3.png" target="_blank"><img src="docs/images/screenshots/pc-add-server-3.png" width="100%" alt="Add server 3"></a><br><sub><b>Add Server ③</b></sub></td>
+    <td colspan="2" width="50%"><img src="docs/images/screenshots/pc-add-server-3.png" width="100%" alt="Add server 3"><br><sub><b>Add Server ③</b></sub></td>
   </tr>
 </table>
 
@@ -76,14 +76,14 @@
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/images/screenshots/mobile-home.jpg" target="_blank"><img src="docs/images/screenshots/mobile-home.jpg" width="100%" alt="Home"></a><br><sub><b>Home</b></sub></td>
-    <td width="33%"><a href="docs/images/screenshots/mobile-series-detail.jpg" target="_blank"><img src="docs/images/screenshots/mobile-series-detail.jpg" width="100%" alt="Series detail"></a><br><sub><b>Series Detail</b></sub></td>
-    <td width="33%"><a href="docs/images/screenshots/mobile-episode-detail.jpg" target="_blank"><img src="docs/images/screenshots/mobile-episode-detail.jpg" width="100%" alt="Episode detail"></a><br><sub><b>Episode Detail</b></sub></td>
+    <td width="33%"><img src="docs/images/screenshots/mobile-home.jpg" width="100%" alt="Home"><br><sub><b>Home</b></sub></td>
+    <td width="33%"><img src="docs/images/screenshots/mobile-series-detail.jpg" width="100%" alt="Series detail"><br><sub><b>Series Detail</b></sub></td>
+    <td width="33%"><img src="docs/images/screenshots/mobile-episode-detail.jpg" width="100%" alt="Episode detail"><br><sub><b>Episode Detail</b></sub></td>
   </tr>
   <tr>
-    <td><a href="docs/images/screenshots/mobile-movie-detail.jpg" target="_blank"><img src="docs/images/screenshots/mobile-movie-detail.jpg" width="100%" alt="Movie detail"></a><br><sub><b>Movie Detail</b></sub></td>
-    <td><a href="docs/images/screenshots/mobile-rankings.jpg" target="_blank"><img src="docs/images/screenshots/mobile-rankings.jpg" width="100%" alt="Rankings"></a><br><sub><b>Rankings</b></sub></td>
-    <td><a href="docs/images/screenshots/mobile-settings.jpg" target="_blank"><img src="docs/images/screenshots/mobile-settings.jpg" width="100%" alt="Settings"></a><br><sub><b>Settings</b></sub></td>
+    <td><img src="docs/images/screenshots/mobile-movie-detail.jpg" width="100%" alt="Movie detail"><br><sub><b>Movie Detail</b></sub></td>
+    <td><img src="docs/images/screenshots/mobile-rankings.jpg" width="100%" alt="Rankings"><br><sub><b>Rankings</b></sub></td>
+    <td><img src="docs/images/screenshots/mobile-settings.jpg" width="100%" alt="Settings"><br><sub><b>Settings</b></sub></td>
   </tr>
 </table>
 
