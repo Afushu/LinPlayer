@@ -1554,7 +1554,7 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
         if (_isFullscreen) {
           _toggleFullscreen();
         } else if (context.canPop()) {
-          context.pop();
+          _handleExit(); // 同返回按钮：还原外壳后再 pop，避免标题栏丢失
         }
         break;
       case LogicalKeyboardKey.space:
@@ -3594,7 +3594,10 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
           _buildIconButton(
             icon: Icons.arrow_back,
             tooltip: '返回',
-            onPressed: () => context.pop(),
+            // 走两段式退出：先在 mounted 时还原窗口外壳（恢复标题栏/退全屏）再 pop。
+            // 直接 context.pop() 会强制越过 PopScope，靠 dispose 里还原沉浸态又可能被
+            // ProviderScope 提前销毁吞掉 → 回到详情页标题栏（最小化/关闭）永久消失。
+            onPressed: _handleExit,
           ),
           const SizedBox(width: 12),
           // 标题
