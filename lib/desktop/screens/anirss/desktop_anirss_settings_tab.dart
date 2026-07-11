@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import '../../routes/shell_navigation.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/server_providers.dart';
@@ -246,7 +246,7 @@ class _ServerManagementCard extends ConsumerWidget {
     ref.read(serverListProvider.notifier).removeServer(server.id);
     ref.read(currentServerProvider.notifier).state = null;
     ref.read(authStateProvider.notifier).state = AuthState.unauthenticated;
-    if (context.mounted) context.go('/');
+    if (context.mounted) returnToShellRoute(context, '/');
   }
 
   void _invalidateAll(WidgetRef ref) {

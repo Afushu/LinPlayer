@@ -10,30 +10,42 @@ import 'package:path_provider/path_provider.dart';
 /// （mpv 只能从文件系统读 shader）。以前档位映射只写在 media_kit 适配器里，
 /// 原生 mpv 适配器拿不到映射 → Android 超分完全不生效，抽到这里两端共用。
 ///
-/// A/B/C 由弱到强；A+A / B+B / A+C 为官方 Anime4K 双通道加强档（用现有 shader
-/// 近似）。'off' / 未知档位返回空列表（= 关闭超分）。
+/// 六档 = Anime4K **官方推荐模式**（与主流播放器一致），A/B/C 是**算法**不是尺寸：
+///   A = Restore（还原，通用动画）
+///   B = Restore Soft（柔和还原，防过锐，适合本就偏锐的源）
+///   C = Upscale+Denoise（去噪放大，压缩重/噪点多的低码率老片）
+///   A+A / B+B / C+A = 各自的双通道加强版。
+/// 尺寸（画质/算力）另取：单档 A/B/C 用 **L(Large)** 甜点尺寸（大多数独显流畅）；
+/// 加强档 A+A/B+B/C+A 用 **VL(Very Large)** 壮机尺寸。shader 链照搬官方 GLSL 组合，
+/// 仅把单档的主通道 VL 降为 L 以求「不卡」。'off'/未知档位返回空列表(=关超分)。
 const Map<String, List<String>> kAnime4KShaderPresets = {
+  // A：还原（L）
   'modeA': [
     'Anime4K_Clamp_Highlights.glsl',
-    'Anime4K_Restore_CNN_S.glsl',
-    'Anime4K_Upscale_CNN_x2_S.glsl',
+    'Anime4K_Restore_CNN_L.glsl',
+    'Anime4K_Upscale_CNN_x2_L.glsl',
+    'Anime4K_AutoDownscalePre_x2.glsl',
+    'Anime4K_AutoDownscalePre_x4.glsl',
+    'Anime4K_Upscale_CNN_x2_M.glsl',
   ],
+  // B：柔和还原（Soft, L）
   'modeB': [
     'Anime4K_Clamp_Highlights.glsl',
-    'Anime4K_Restore_CNN_M.glsl',
-    'Anime4K_Upscale_CNN_x2_M.glsl',
+    'Anime4K_Restore_CNN_Soft_L.glsl',
+    'Anime4K_Upscale_CNN_x2_L.glsl',
     'Anime4K_AutoDownscalePre_x2.glsl',
     'Anime4K_AutoDownscalePre_x4.glsl',
-    'Anime4K_Upscale_CNN_x2_S.glsl',
+    'Anime4K_Upscale_CNN_x2_M.glsl',
   ],
+  // C：去噪放大（Upscale+Denoise, L）
   'modeC': [
     'Anime4K_Clamp_Highlights.glsl',
-    'Anime4K_Restore_CNN_VL.glsl',
-    'Anime4K_Upscale_CNN_x2_VL.glsl',
+    'Anime4K_Upscale_Denoise_CNN_x2_L.glsl',
     'Anime4K_AutoDownscalePre_x2.glsl',
     'Anime4K_AutoDownscalePre_x4.glsl',
     'Anime4K_Upscale_CNN_x2_M.glsl',
   ],
+  // A+A：还原加强（VL + 二次 Restore_M）
   'modeAA': [
     'Anime4K_Clamp_Highlights.glsl',
     'Anime4K_Restore_CNN_VL.glsl',
@@ -43,18 +55,20 @@ const Map<String, List<String>> kAnime4KShaderPresets = {
     'Anime4K_AutoDownscalePre_x4.glsl',
     'Anime4K_Upscale_CNN_x2_M.glsl',
   ],
+  // B+B：柔和还原加强（Soft VL + 二次 Soft_M）
   'modeBB': [
     'Anime4K_Clamp_Highlights.glsl',
-    'Anime4K_Restore_CNN_M.glsl',
+    'Anime4K_Restore_CNN_Soft_VL.glsl',
     'Anime4K_Upscale_CNN_x2_VL.glsl',
     'Anime4K_AutoDownscalePre_x2.glsl',
-    'Anime4K_Restore_CNN_M.glsl',
+    'Anime4K_Restore_CNN_Soft_M.glsl',
     'Anime4K_AutoDownscalePre_x4.glsl',
     'Anime4K_Upscale_CNN_x2_M.glsl',
   ],
+  // C+A：去噪放大 + 还原加强（Denoise VL + Restore_M）
   'modeAC': [
     'Anime4K_Clamp_Highlights.glsl',
-    'Anime4K_Upscale_CNN_x2_VL.glsl',
+    'Anime4K_Upscale_Denoise_CNN_x2_VL.glsl',
     'Anime4K_AutoDownscalePre_x2.glsl',
     'Anime4K_AutoDownscalePre_x4.glsl',
     'Anime4K_Restore_CNN_M.glsl',

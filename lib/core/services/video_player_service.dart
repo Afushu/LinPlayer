@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' show max, min;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -48,6 +49,10 @@ class VideoPlayerService extends ChangeNotifier {
   // 当前 Anime4K 超分档位（off/modeA/…）。跨适配器重建保留，初始化时回传给内核，
   // 让 media_kit 在开超分时选硬件纹理、原生 mpv 解析出 shader 链。
   String _superResolutionLevel = 'off';
+  // Windows 硬解「零拷贝」(d3d11va)：与 ANGLE 同 D3D11 后端，解码帧直接共享、免每帧拷回，
+  // 实测消除硬件纹理下的卡/闪，故 Windows **默认开**；关掉回落 auto-copy(拷回,兼容兜底)。
+  // 会话级不落盘：万一某显卡 d3d11va 起不来，mpv 自会降级软解(不崩),重启也回默认。
+  bool _zeroCopyHwdec = Platform.isWindows;
   String? _primaryVideoUrl;
   String? _fallbackVideoUrl;
   // 逐流取流鉴权（网盘/聚合源直链）：主/兜底链路与适配器重建都复用同一份。
@@ -334,6 +339,7 @@ class VideoPlayerService extends ChangeNotifier {
       httpHeaders: _httpHeaders,
       userAgentOverride: _userAgentOverride,
       superResolutionLevel: _superResolutionLevel,
+      zeroCopyHwdec: _zeroCopyHwdec,
     );
     _logger.i('VideoPlayerService', '适配器初始化完成, surfaceViewId=$_surfaceViewId');
     if (!(_adapter?.isInitialized ?? false) || (_adapter?.hasError ?? false)) {
@@ -1105,12 +1111,10 @@ class VideoPlayerService extends ChangeNotifier {
 
   /// 当前是否能「即时」切换超分档位（含开/关）而无需重建播放管线。
   ///
-  /// GLSL user shader 只能在硬件(OpenGL)渲染管线里跑。media_kit 在 Windows/macOS
-  /// 默认走软件纹理（消弹面板闪屏），SW 渲染管线不跑 shader → 此时开超分毫无变化，
-  /// 且纹理模式在建 VideoController 时就定死，无法运行时切换。所以：
-  /// - Android 原生 mpv / 已是硬件纹理的桌面 → 可即时应用。
-  /// - 桌面软件纹理下想开超分 → 不即时重建（避免整段重新缓冲），改为存档位，
-  ///   下次播放用硬件纹理起播时自动生效。
+  /// GLSL user shader 只能在硬件(OpenGL)渲染管线里跑。纹理模式在建 VideoController
+  /// 时定死、无法运行时切换。桌面三端已恒硬件纹理 → 恒可即时应用，超分/六档随手切。
+  /// （保留此判定：若 macOS 因黑屏回退软件纹理，isSoftwareTexture 会重新为真，
+  /// 届时桌面 UI 自动退回「下次播放生效」分支。）
   bool get superResolutionCanApplyLive {
     final a = _adapter;
     if (a is MpvPlayerAdapter) return !a.isSoftwareTexture;
@@ -1118,6 +1122,17 @@ class VideoPlayerService extends ChangeNotifier {
   }
 
   String get superResolutionLevel => _superResolutionLevel;
+
+  bool get zeroCopyHwdec => _zeroCopyHwdec;
+
+  /// 切换 Windows 硬解零拷贝(d3d11va)↔拷回(auto-copy)。会话级、不落盘。
+  /// 记住状态，跨适配器重建（换硬解/换线路）自动重放；当前播放中即时切换。
+  Future<void> setZeroCopyHwdec(bool enable) async {
+    _zeroCopyHwdec = enable;
+    final a = _adapter;
+    if (a is MpvPlayerAdapter) await a.applyZeroCopyHwdec(enable);
+    notifyListeners();
+  }
 
   /// mpv 应用超分后实际持有的 shader 数（回读值）。0 = 没落到内核；>0 但软件纹理
   /// 下仍不会渲染。用于 UI 给用户「到底生效没」的确切反馈，取代盲猜。

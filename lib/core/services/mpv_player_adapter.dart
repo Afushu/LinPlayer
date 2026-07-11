@@ -39,6 +39,10 @@ class MpvPlayerAdapter implements PlayerAdapter {
   Widget? _videoWidget;
 
   bool _isInitialized = false;
+  // 本适配器是否已被 dispose。用于「初始化途中被顶替/销毁」的孤儿守卫：initialize 是
+  // 异步长流程，若期间外部调用了 dispose（如播放页被顶替），init 若继续跑完会留下一个
+  // 无人引用却在后台出声的孤儿 Player。收尾前回读此标志，被销毁则销掉刚建的 Player 再退。
+  bool _adapterDisposed = false;
   bool _isPlaying = false;
   bool _isBuffering = false;
   bool _isCompleted = false;
@@ -58,6 +62,12 @@ class MpvPlayerAdapter implements PlayerAdapter {
   String? _userAgentOverride;
   String? _aspectRatio;
   List<String>? _glslShaders;
+  // 当前是否硬件解码（initialize 传入，供 applyZeroCopyHwdec 决定是否可切）。
+  bool _hardwareDecoding = true;
+  // Windows 硬解「零拷贝」实验：true=d3d11va(解码帧直接共享进 ANGLE，不每帧拷回内存)，
+  // false=auto-copy(默认，兼容性最好但每帧 GPU→内存拷回，是卡的一大来源)。会话级、不落盘：
+  // 部分显卡 d3d11va-egl 交互可能失败/黑屏，重启回默认 auto-copy 保证不 brick 启动。
+  bool _zeroCopyHwdec = false;
   // 当前 VideoController 是否走软件纹理（Win/macOS 消闪屏用）。软件纹理的 SW 渲染
   // 管线不跑 GLSL shader，故此时无法即时开超分——需下次播放用硬件纹理重建才生效。
   bool _softwareTextureActive = false;
@@ -579,8 +589,11 @@ class MpvPlayerAdapter implements PlayerAdapter {
     Map<String, String>? httpHeaders,
     String? userAgentOverride,
     String? superResolutionLevel, // Anime4K 档位：决定 shader 链 + 纹理渲染模式
+    bool zeroCopyHwdec = false, // Windows 硬解零拷贝(d3d11va)实验开关
   }) async {
     _logger.i('MpvAdapter', '开始初始化 media_kit 内核');
+    _hardwareDecoding = hardwareDecoding;
+    _zeroCopyHwdec = zeroCopyHwdec;
     // Anime4K 超分档位在建控制器前定下：GLSL user shader 只能在硬件(OpenGL)渲染
     // 管线里跑；软件纹理(MPV_RENDER_API_TYPE_SW)会静默忽略 glsl-shaders，超分开了
     // 也毫无变化。因此开超分时强制走硬件纹理（代价是 Win 弹面板可能有轻微闪一下，
@@ -592,6 +605,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
     }
     try {
       await dispose();
+      _adapterDisposed = false; // 本次初始化开始；dispose() 刚把它置真，这里复位
       _errorMessage = null;
       _isCompleted = false;
       _tracks = [];
@@ -638,19 +652,21 @@ class MpvPlayerAdapter implements PlayerAdapter {
       // 移动端 SurfaceTexture 缓存末帧故不闪。软件纹理由 Flutter 托管、末帧常驻，
       // 重组图层不掉帧→消除闪现；代价同 macOS：4K 每帧 CPU 上传。若 4K 掉帧明显，
       // 回退本行即可(仅去掉 isWindows)。解码仍是硬解(dxva2/d3d11)。
-      // 开了 Anime4K 超分时必须走硬件纹理，否则 SW 渲染管线不跑 GLSL shader
-      // （超分完全无效，画面无变化）。未开超分则维持软件纹理以消除弹面板闪屏。
-      final wantsShaders = _glslShaders != null && _glslShaders!.isNotEmpty;
-      final softwareTexture =
-          (Platform.isMacOS || Platform.isWindows) && !wantsShaders;
+      // 桌面三端恒硬件纹理，让 Anime4K 超分即时生效、六档随手切、关掉立即不卡——
+      // 体验与 Android/移动端一致（用户明确要求三端一致）。原因：GLSL user shader 只能在
+      // 硬件(OpenGL)渲染管线里跑；软件纹理的 SW 渲染管线根本不跑 shader。而纹理模式在建
+      // VideoController 时就定死、无法运行时切换（media_kit 一个 Player 只挂一个渲染上下文，
+      // VideoController 也没有单独 dispose 接口）。要即时超分，只能从起播就恒硬件纹理，
+      // 二者不可兼得。取舍（用户已确认接受）：
+      //   Windows — 弹选集/设置面板时画面可能闪一下（ANGLE 重组图层丢末帧）；
+      //   macOS   — 硬件纹理走 GL 上下文，反复 create/dispose 后或泄漏 → 第 N 次播放黑屏
+      //             有声（老 macOS/Intel 尤甚，Apple Silicon/新系统未必复现，见
+      //             macos-no-video-hwdec）。⚠️若 macOS 真机出现黑屏，把下面这行换成
+      //             `Platform.isMacOS && (_glslShaders?.isEmpty ?? true)`，并把下面
+      //             VideoController 的 configuration 换成按该值三元选择软/硬件纹理。
+      const softwareTexture = false;
       _softwareTextureActive = softwareTexture;
-      _videoController = VideoController(
-        _player!,
-        configuration: softwareTexture
-            ? const VideoControllerConfiguration(
-                enableHardwareAcceleration: false)
-            : const VideoControllerConfiguration(),
-      );
+      _videoController = VideoController(_player!);
       _videoWidget = null; // 新控制器，丢弃旧的缓存 Video 实例
       _setupStreamListeners();
 
@@ -688,7 +704,9 @@ class MpvPlayerAdapter implements PlayerAdapter {
               : (Platform.isMacOS
                   ? 'videotoolbox-copy'
                   : Platform.isWindows
-                      ? 'auto-copy'
+                      // 零拷贝实验开时用 d3d11va（与 ANGLE 同 D3D11 后端，解码帧直接
+                      // 共享、免每帧拷回）；默认 auto-copy（拷回，兼容性最好、防 EGL 崩）。
+                      ? (_zeroCopyHwdec ? 'd3d11va' : 'auto-copy')
                       : 'auto-safe');
           await np.setProperty('hwdec', hwdecValue);
           // 安全加固 · CVE-2026-8461 (PixelSmash)：libavcodec 的 magicyuv 解码器
@@ -766,6 +784,16 @@ class MpvPlayerAdapter implements PlayerAdapter {
       }
 
       await _openVideoSource(videoUrl, startPosition: startPosition);
+
+      // 孤儿守卫：初始化这段异步期间若被 dispose 顶替，销掉刚建好的 Player 再退，
+      // 否则它无人引用却在后台继续出声（「双声音」的孤儿来源之一）。
+      if (_adapterDisposed) {
+        _logger.w('MpvAdapter', '初始化途中已被销毁，丢弃本次刚建的 Player 以免孤儿出声');
+        await _player?.dispose();
+        _player = null;
+        _videoController = null;
+        return;
+      }
 
       _isInitialized = true;
       _callbacks?.onDurationChanged?.call();
@@ -2069,6 +2097,24 @@ class MpvPlayerAdapter implements PlayerAdapter {
     await _applyShaderList(_glslShaders);
   }
 
+  bool get zeroCopyHwdec => _zeroCopyHwdec;
+
+  /// 运行时切换 Windows 硬解零拷贝(d3d11va)↔拷回(auto-copy)，无需重载流。
+  /// 仅在 Windows + 硬解开启时有意义；mpv 会就地重建解码器，画面短暂一顿属正常。
+  /// ⚠️d3d11va-egl 在个别显卡/驱动可能建 interop 失败→黑屏/闪退，属实验取舍。
+  Future<void> applyZeroCopyHwdec(bool enable) async {
+    _zeroCopyHwdec = enable;
+    final np = _nativePlayer;
+    if (np == null || !Platform.isWindows || !_hardwareDecoding) return;
+    try {
+      await np.setProperty('hwdec', enable ? 'd3d11va' : 'auto-copy');
+      _logger.i('MpvAdapter',
+          '硬解零拷贝已${enable ? '开启(d3d11va)' : '关闭(auto-copy)'}');
+    } catch (e) {
+      _logger.w('MpvAdapter', '切换硬解零拷贝失败: $e');
+    }
+  }
+
   @override
   Future<Map<String, String>> getPlaybackStats() async {
     final np = _nativePlayer;
@@ -2218,6 +2264,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
 
   @override
   Future<void> dispose() async {
+    _adapterDisposed = true; // 供 initialize 的孤儿守卫感知「初始化途中被销毁」
     _seekBufferingPollTimer?.cancel();
     _seekBufferingPollTimer = null;
     _seekBufferingFallbackTimer?.cancel();

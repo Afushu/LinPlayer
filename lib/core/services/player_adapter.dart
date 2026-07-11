@@ -69,6 +69,7 @@ abstract class PlayerAdapter {
     Map<String, String>? httpHeaders,
     String? userAgentOverride,
     String? superResolutionLevel,  // Anime4K 档位；决定初始 shader 链 + 渲染模式
+    bool zeroCopyHwdec = false,  // Windows 硬解零拷贝(d3d11va)实验开关；其余内核忽略
   });
 
   /// 加载外部字幕文件（通过 libass）

@@ -501,7 +501,7 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
           onTap: () {
             _hideAllOverlays();
             ref.read(currentPlayingItemProvider.notifier).state = widget.item;
-            context.push('/player/${widget.itemId}');
+            pushPlayerRoute(context, '/player/${widget.itemId}');
           },
         ),
         _MenuItem(
@@ -795,7 +795,7 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
             onTap: () {
               // 继续观看或从头播放
               ref.read(currentPlayingItemProvider.notifier).state = widget.item;
-              context.push('/player/${widget.itemId}');
+              pushPlayerRoute(context, '/player/${widget.itemId}');
             },
             onDropdownTapDown: _rememberMenuAnchor,
             onDropdownTap: _togglePlayMenu,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import '../../routes/shell_navigation.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/server_providers.dart';
@@ -42,7 +42,8 @@ class _DesktopSourceLoginScreenState
     ref.read(serverListProvider.notifier).addServer(server);
     ref.read(currentServerProvider.notifier).state = server;
     ref.read(authStateProvider.notifier).state = AuthState.authenticated;
-    if (mounted) context.go('/');
+    // 壳外 push 的登录页：只 context.go('/') 会不复位分支+毒死 Home 按钮，走安全切分支。
+    if (mounted) returnToShellRoute(context, '/');
   }
 
   @override

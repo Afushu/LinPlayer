@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../routes/shell_navigation.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../core/api/emby_api.dart';
@@ -200,7 +201,7 @@ class _DesktopServerScreenState extends ConsumerState<DesktopServerScreen> {
     // 网盘/聚合源：切到首页分支，由 DesktopHomeScreen 渲染文件浏览视图。
     if (server.isFileBrowse) {
       ref.read(authStateProvider.notifier).state = AuthState.authenticated;
-      context.go('/');
+      returnToShellRoute(context, '/');
       return;
     }
     if (serverHasUsableAuth(server)) {

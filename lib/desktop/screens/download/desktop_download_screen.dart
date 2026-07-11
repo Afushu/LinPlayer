@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import '../../routes/player_navigation.dart';
 
 import '../../../core/providers/download_providers.dart';
 import '../../../core/services/download/download_grouping.dart';
@@ -262,7 +262,7 @@ class _Row extends StatelessWidget {
         : item.title;
 
     return InkWell(
-      onTap: isCompleted ? () => context.push('/player/${item.itemId}') : null,
+      onTap: isCompleted ? () => pushPlayerRoute(context, '/player/${item.itemId}') : null,
       child: Padding(
         padding: EdgeInsets.fromLTRB(16, compact ? 10 : 14, 12, compact ? 10 : 14),
         child: Row(
@@ -336,7 +336,7 @@ class _Row extends StatelessWidget {
               IconButton(
                   tooltip: '播放',
                   icon: const Icon(Icons.play_circle_outline),
-                  onPressed: () => context.push('/player/${item.itemId}'))
+                  onPressed: () => pushPlayerRoute(context, '/player/${item.itemId}'))
             else if (isFailed)
               IconButton(
                   tooltip: '重试',

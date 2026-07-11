@@ -1951,15 +1951,16 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
 
   Future<void> _showAnime4KMenu() async {
     final currentLevel = ref.read(anime4KLevelProvider);
-    // A/B/C 由弱到强；A+A/B+B/A+C 为双通道加强档（与移动端一致，共 6 档）。
+    // Anime4K 官方模式（算法，非尺寸）：A=还原 / B=柔和还原 / C=去噪放大，
+    // A+A/B+B/C+A 为各自双通道加强档（三端一致，共 6 档）。
     const levels = [
       {'value': 'off', 'label': '关闭'},
-      {'value': 'modeA', 'label': '模式 A - 性能优先'},
-      {'value': 'modeB', 'label': '模式 B - 平衡'},
-      {'value': 'modeC', 'label': '模式 C - 质量优先'},
-      {'value': 'modeAA', 'label': '模式 A+A - 加强'},
-      {'value': 'modeBB', 'label': '模式 B+B - 加强'},
-      {'value': 'modeAC', 'label': '模式 A+C - 加强'},
+      {'value': 'modeA', 'label': '模式 A - 还原（通用）'},
+      {'value': 'modeB', 'label': '模式 B - 柔和还原'},
+      {'value': 'modeC', 'label': '模式 C - 去噪放大'},
+      {'value': 'modeAA', 'label': '模式 A+A - 还原加强'},
+      {'value': 'modeBB', 'label': '模式 B+B - 柔和加强'},
+      {'value': 'modeAC', 'label': '模式 C+A - 去噪加强'},
     ];
     final result = await showPlayerSettingsPanel<String>(
       context: context,
@@ -2029,7 +2030,7 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
       case 'modeBB':
         return '模式 B+B';
       case 'modeAC':
-        return '模式 A+C';
+        return '模式 C+A';
       default:
         return level;
     }
@@ -2117,6 +2118,18 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
             leading: const Icon(Icons.hd),
             selected: anime4KLevel != 'off',
             onTap: () => go(_showAnime4KMenu),
+          ),
+        // 零拷贝解码：仅 Windows + mpv。d3d11va 解码帧直连 ANGLE、免每帧拷回，
+        // 消除硬件纹理下的卡/闪，故默认开；个别显卡若花屏/黑屏可关掉回落 auto-copy。
+        if (isMpv && Platform.isWindows)
+          PanelOptionTile(
+            label: '零拷贝解码（d3d11va）',
+            subtitle: _playerService.zeroCopyHwdec
+                ? '当前: d3d11va 直连（默认，更顺；若花屏/黑屏请关）'
+                : '当前: auto-copy 拷回（兼容兜底）',
+            leading: const Icon(Icons.bolt),
+            selected: _playerService.zeroCopyHwdec,
+            onTap: () => go(_toggleZeroCopyHwdec),
           ),
         PanelOptionTile(
           label: '统计信息',
@@ -3990,6 +4003,23 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
     if (mounted) {
       AppToast.show(context, !current ? '已切换硬件解码' : '已切换软件解码',
           position: AppToastPosition.topCenter);
+    }
+  }
+
+  // ========== 零拷贝解码（实验）切换 ==========
+
+  void _toggleZeroCopyHwdec() async {
+    final enable = !_playerService.zeroCopyHwdec;
+    // 即时切换，不重载流（mpv 就地重建解码器，画面短暂一顿属正常）。
+    await _playerService.setZeroCopyHwdec(enable);
+    if (mounted) {
+      AppToast.show(
+        context,
+        enable
+            ? '已切到零拷贝解码(d3d11va)——若花屏/黑屏请再点一次关掉'
+            : '已切到 auto-copy 拷回（兼容兜底）',
+        position: AppToastPosition.topCenter,
+      );
     }
   }
 }

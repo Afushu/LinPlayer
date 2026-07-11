@@ -140,6 +140,7 @@ class NativeMpvPlayerAdapter implements PlayerAdapter {
     Map<String, String>? httpHeaders,
     String? userAgentOverride,
     String? superResolutionLevel,  // Anime4K 档位；初始化时解析成 shader 链
+    bool zeroCopyHwdec = false,  // Windows 专属实验开关，Android 原生 mpv 忽略
   }) async {
     _logger.i('NativeMpv', '开始初始化 - videoUrl=$videoUrl, surfaceViewId=$surfaceViewId, useGpuNext=$useGpuNext');
     try {

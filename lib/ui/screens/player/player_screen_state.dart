@@ -2301,16 +2301,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   /// Anime4K 超分档位面板（仅 mpv 内核）：6 档 + 关闭。
-  /// A/B/C 由弱到强，A+A/B+B/A+C 为双通道加强档。
+  /// 官方模式（算法）：A=还原 / B=柔和还原 / C=去噪放大，A+A/B+B/C+A 为加强档。
   void _showAnime4kPanel() {
     const gears = <(String, String)>[
       ('off', '关闭'),
-      ('modeA', 'A'),
-      ('modeB', 'B'),
-      ('modeC', 'C'),
-      ('modeAA', 'A+A'),
-      ('modeBB', 'B+B'),
-      ('modeAC', 'A+C'),
+      ('modeA', 'A · 还原'),
+      ('modeB', 'B · 柔和还原'),
+      ('modeC', 'C · 去噪放大'),
+      ('modeAA', 'A+A · 还原加强'),
+      ('modeBB', 'B+B · 柔和加强'),
+      ('modeAC', 'C+A · 去噪加强'),
     ];
     _showRightPanel(
       title: 'Anime4K 超分',

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../routes/player_navigation.dart';
 
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
