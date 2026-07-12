@@ -263,18 +263,41 @@ class PluginManager extends ChangeNotifier {
     return _afterInstall(info);
   }
 
-  /// 安装落盘后的统一收尾：覆盖安装（同 id 升级/重装）时清除旧的启用态、运行时
-  /// 与已同意权限，强制重新走授权弹窗，防止新清单悄悄提权后随下次扫描自动获得
-  /// 新权限。文件 / 网络两条安装路径共用。
+  /// 安装落盘后的统一收尾（文件 / 网络两条安装路径共用）。
+  ///
+  /// 覆盖安装（同 id 升级/重装）时的策略：
+  ///  - **无缝升级**：若插件原本已启用，且新版本申请的权限是「上次已同意权限」的
+  ///    子集（没有新增权限），则保留启用态与已同意权限，直接用新版本重新激活——
+  ///    这样迭代更新无需每次重新启用/重新授权。
+  ///  - **强制重新授权**：其余情况（原本未启用，或新版本申请了新权限）清除启用态
+  ///    与已同意权限，强制重新走授权弹窗，防止新清单悄悄提权后自动获得新权限。
   Future<PluginInfo> _afterInstall(PluginInfo info) async {
-    final wasEnabled = _enabledIds.remove(info.id);
+    final wasEnabled = _enabledIds.contains(info.id);
+    final prevApproved = _approvedPerms[info.id];
+    final newPerms = info.manifest.permissions.toSet();
+    final permsSubset =
+        prevApproved != null && newPerms.difference(prevApproved).isEmpty;
+
     await _deactivate(info.id);
+    _plugins[info.id] = info;
+
+    if (wasEnabled && permsSubset) {
+      // 无缝升级：权限未扩张，保留同意（收敛到新集合）并用新版本重新激活。
+      _approvedPerms[info.id] = newPerms;
+      await _persistApprovedPerms();
+      info.status = PluginStatus.disabled;
+      await _activate(info); // 成功置 enabled；失败内部置 error
+      notifyListeners();
+      return info;
+    }
+
+    // 默认：清启用态与已同意权限，强制重新授权。
+    final removed = _enabledIds.remove(info.id);
     if (_approvedPerms.remove(info.id) != null) {
       await _persistApprovedPerms();
     }
-    if (wasEnabled) await _persistEnabledIds();
+    if (removed) await _persistEnabledIds();
     info.status = PluginStatus.disabled;
-    _plugins[info.id] = info;
     notifyListeners();
     return info;
   }
