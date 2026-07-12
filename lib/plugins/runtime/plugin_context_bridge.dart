@@ -122,8 +122,8 @@ class PluginContextBridge {
       throw Exception('仅允许 HTTPS 请求: $url');
     }
     // 空白名单 = 拒绝所有（fail-closed）：插件必须在 manifest 声明 httpAllowedHosts
-    // 并经用户同意，缺省/空绝不等于“放行任意主机”。
-    if (!httpAllowedHosts.contains(uri.host)) {
+    // 并经用户同意，缺省/空绝不等于“放行任意主机”。支持 `*.example.com` 通配子域。
+    if (!_hostAllowed(uri.host)) {
       throw Exception('域名不在白名单内: ${uri.host}');
     }
 
@@ -182,7 +182,7 @@ class PluginContextBridge {
     // 防重定向绕白名单（L1）：白名单主机若 302 跳到名单外/内网，最终 URL 的
     // host 必须仍在白名单，否则拒绝把重定向内容回传给插件。
     final finalHost = response.realUri.host;
-    if (!httpAllowedHosts.contains(finalHost)) {
+    if (!_hostAllowed(finalHost)) {
       throw Exception('请求经重定向到了白名单外主机: $finalHost');
     }
 
@@ -203,6 +203,21 @@ class PluginContextBridge {
       'headers': response.headers.map,
       'body': _decodeResponse(response.data),
     };
+  }
+
+  /// 白名单匹配：精确 host，或 `*.example.com` 形式的通配子域（不含裸域本身，
+  /// 且要求点分隔，避免 `evil-example.com` 误命中 `*.example.com`）。
+  bool _hostAllowed(String host) {
+    final h = host.toLowerCase();
+    for (final raw in httpAllowedHosts) {
+      final entry = raw.toLowerCase();
+      if (entry == h) return true;
+      if (entry.startsWith('*.')) {
+        final suffix = entry.substring(1); // ".example.com"
+        if (h.length > suffix.length && h.endsWith(suffix)) return true;
+      }
+    }
+    return false;
   }
 
   Map<String, dynamic>? _mergeQuery(Uri uri, dynamic extra) {
