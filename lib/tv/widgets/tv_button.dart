@@ -38,6 +38,7 @@ class TvButton extends StatelessWidget {
       focusNode: focusNode,
       onSelect: onPressed,
       scale: 1.08,
+      borderRadius: 999,
       padding: EdgeInsets.all(m.spacingXs),
       child: Container(
         padding: EdgeInsets.symmetric(

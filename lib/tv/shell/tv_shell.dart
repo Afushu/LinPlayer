@@ -4,9 +4,12 @@ import '../theme/tv_design_tokens.dart';
 import '../widgets/tv_sidebar.dart';
 
 /// TV Shell
-/// 左侧导航栏 + 右侧内容区
-/// 处理导航栏和内容区之间的焦点切换
-class TvShell extends StatefulWidget {
+/// 左侧导航栏 + 右侧内容区。
+///
+/// 焦点：侧边栏与内容各自是一个 FocusTraversalGroup，方向键左右在两组之间自然跳转。
+/// 关键——不再用「裸 Focus 包一层」：那种包裹自身可聚焦却没有任何高亮，
+/// 会把焦点吞到一个看不见的节点上（表现为「光标不见了 / 完全动不了」）。
+class TvShell extends StatelessWidget {
   final Widget child;
   final int selectedIndex;
 
@@ -15,14 +18,6 @@ class TvShell extends StatefulWidget {
     required this.child,
     required this.selectedIndex,
   });
-
-  @override
-  State<TvShell> createState() => _TvShellState();
-}
-
-class _TvShellState extends State<TvShell> {
-  final FocusNode _sidebarFocusNode = FocusNode();
-  final FocusNode _contentFocusNode = FocusNode();
 
   static const List<String> _routes = [
     '/tv/home',
@@ -35,41 +30,28 @@ class _TvShellState extends State<TvShell> {
   ];
 
   @override
-  void dispose() {
-    _sidebarFocusNode.dispose();
-    _contentFocusNode.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: TvDesignTokens.background,
       body: Row(
         children: [
-          // 左侧导航栏
-          Focus(
-            focusNode: _sidebarFocusNode,
+          // 左侧导航栏（独立遍历组）
+          FocusTraversalGroup(
             child: TvSidebar(
-              selectedIndex: widget.selectedIndex,
-              onItemSelected: (index) {
-                _navigateToPage(index);
-              },
+              selectedIndex: selectedIndex,
+              onItemSelected: (index) => _navigateToPage(context, index),
             ),
           ),
-          // 右侧内容区
+          // 右侧内容区（独立遍历组）
           Expanded(
-            child: Focus(
-              focusNode: _contentFocusNode,
-              child: widget.child,
-            ),
+            child: FocusTraversalGroup(child: child),
           ),
         ],
       ),
     );
   }
 
-  void _navigateToPage(int index) {
+  void _navigateToPage(BuildContext context, int index) {
     if (index >= 0 && index < _routes.length) {
       context.go(_routes[index]);
     }

@@ -21,16 +21,21 @@ class TvDesignTokens {
   static const Color success = AppColors.success;
 
   // === 焦点状态 ===
-  // 选中/聚焦改为「微微放大 + 品牌色蓝色覆盖」，不再用白色描边大放大（过丑）。
+  // 「微微放大 + 品牌色高亮环」：明显但不丑。焦点环沿子组件圆角走（pill 就是 pill，
+  // 卡片就是卡片），不再是一层看不清的方形蓝色蒙版。
   static const Color focusBorder = Color(0xFFFFFFFF);
-  static const Color focusGlow = Color(0x4D5B8DEF); // 品牌色 30% 透明度
-  static const double focusScale = 1.04;
+  static const Color focusGlow = Color(0x665B8DEF); // 品牌色 ~40% 光晕
+  static const double focusScale = 1.05;
   static const double focusBorderWidth = 3.0;
   static const double focusGlowBlur = 20.0;
-  /// 聚焦时叠加在卡片上的品牌色覆盖（半透明蓝）。
-  static const Color focusOverlay = Color(0x335B8DEF);
-  static const Duration focusAnimationDuration = Duration(milliseconds: 250);
-  static const Curve focusAnimationCurve = Curves.easeInOut;
+  /// 聚焦环颜色（品牌蓝，实心可见）。
+  static const Color focusRing = brand;
+  /// 聚焦时叠加在卡片上的淡品牌色填充（让高亮更明显，但不糊住内容）。
+  static const Color focusFill = Color(0x1F5B8DEF);
+  /// 聚焦环线宽。
+  static const double focusRingWidth = 3.0;
+  static const Duration focusAnimationDuration = Duration(milliseconds: 150);
+  static const Curve focusAnimationCurve = Curves.easeOut;
 
   // === 非焦点状态 ===
   static const double nonFocusOpacity = 0.8;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/tv_design_tokens.dart';
 import '../theme/tv_metrics.dart';
 
@@ -22,6 +21,10 @@ class TvFocusable extends StatefulWidget {
   final double scale;
   final bool enableGlow;
 
+  /// 焦点环/高亮的圆角，传 null 时按当前屏幕取 posterRadius。
+  /// 让焦点环沿子组件真实形状走：pill 传 999、卡片传 posterRadius。
+  final double? borderRadius;
+
   const TvFocusable({
     super.key,
     required this.child,
@@ -34,6 +37,7 @@ class TvFocusable extends StatefulWidget {
     this.padding,
     this.scale = TvDesignTokens.focusScale,
     this.enableGlow = true,
+    this.borderRadius,
   });
 
   @override
@@ -47,6 +51,7 @@ class _TvFocusableState extends State<TvFocusable> {
   Widget build(BuildContext context) {
     final m = context.tv;
     final padding = widget.padding ?? EdgeInsets.all(m.spacingSm);
+    final radius = BorderRadius.circular(widget.borderRadius ?? m.posterRadius);
     return Focus(
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
@@ -76,11 +81,10 @@ class _TvFocusableState extends State<TvFocusable> {
         }
         return KeyEventResult.ignored;
       },
-      // 性能要点：
-      // - 用单个 flutter_animate 链同时驱动 缩放 + 透明度（一个 controller），
-      //   取代原先 AnimatedContainer + AnimatedScale + AnimatedOpacity 三层；
-      // - 焦点描边/光晕的阴影是“静态”的，仅做透明度淡入淡出，绝不对 blur 做动画
-      //   （动画 blurRadius 是焦点网格掉帧的元凶）；
+      // 性能/观感要点：
+      // - 缩放用原生 AnimatedScale（单隐式动画），焦点环/光晕用 AnimatedOpacity 淡入淡出，
+      //   阴影是“静态”的，绝不对 blurRadius 做动画（那是焦点网格掉帧的元凶）；
+      // - 焦点环沿子组件真实圆角走（pill=999、卡片=posterRadius），不再是看不清的方形蒙版；
       // - 外层 RepaintBoundary 把每个卡片的重绘隔离开。
       child: Builder(
         builder: (context) => GestureDetector(
@@ -98,47 +102,56 @@ class _TvFocusableState extends State<TvFocusable> {
                   widget.onLongPress!.call();
                 },
           child: RepaintBoundary(
-        child: Padding(
-          padding: padding,
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
-              widget.child
-                  .animate(target: _isFocused ? 1 : 0)
-                  .scaleXY(
-                    begin: 1.0,
-                    end: widget.scale,
-                    duration: TvDesignTokens.focusAnimationDuration,
-                    curve: TvDesignTokens.focusAnimationCurve,
-                    alignment: Alignment.center,
-                  )
-                  .fade(
-                    begin: TvDesignTokens.nonFocusOpacity,
-                    end: 1.0,
-                    duration: TvDesignTokens.focusAnimationDuration,
-                    curve: TvDesignTokens.focusAnimationCurve,
-                  ),
-              // 聚焦指示：仅一层淡淡的品牌蓝覆盖（无白色描边、无大光晕）。
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedOpacity(
-                    duration: TvDesignTokens.focusAnimationDuration,
-                    curve: TvDesignTokens.focusAnimationCurve,
-                    opacity: _isFocused ? 1.0 : 0.0,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: TvDesignTokens.focusOverlay,
-                        borderRadius: BorderRadius.circular(m.posterRadius),
+            child: Padding(
+              padding: padding,
+              child: AnimatedScale(
+                scale: _isFocused ? widget.scale : 1.0,
+                duration: TvDesignTokens.focusAnimationDuration,
+                curve: TvDesignTokens.focusAnimationCurve,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedOpacity(
+                      duration: TvDesignTokens.focusAnimationDuration,
+                      curve: TvDesignTokens.focusAnimationCurve,
+                      opacity: _isFocused ? 1.0 : TvDesignTokens.nonFocusOpacity,
+                      child: widget.child,
+                    ),
+                    // 焦点指示：品牌蓝高亮环 + 淡填充 + 柔和外发光，沿子组件圆角。
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: AnimatedOpacity(
+                          duration: TvDesignTokens.focusAnimationDuration,
+                          curve: TvDesignTokens.focusAnimationCurve,
+                          opacity: _isFocused ? 1.0 : 0.0,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: TvDesignTokens.focusFill,
+                              borderRadius: radius,
+                              border: Border.all(
+                                color: TvDesignTokens.focusRing,
+                                width: TvDesignTokens.focusRingWidth,
+                              ),
+                              boxShadow: widget.enableGlow
+                                  ? const [
+                                      BoxShadow(
+                                        color: TvDesignTokens.focusGlow,
+                                        blurRadius: 16,
+                                        spreadRadius: 1,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
         ),
       ),
     );

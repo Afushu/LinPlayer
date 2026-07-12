@@ -59,7 +59,8 @@ class _TvSidebarState extends ConsumerState<TvSidebar> {
             final isSelected = widget.selectedIndex == index;
 
             return TvFocusable(
-              autofocus: index == 0,
+              // 不 autofocus：初始焦点交给内容区（Hero/首卡/按钮），
+              // 避免与内容 autofocus 抢焦点导致「光标落在看不见的地方」。
               onSelect: () => widget.onItemSelected(index),
               padding: EdgeInsets.symmetric(
                 horizontal: m.spacingMd,
@@ -71,7 +72,7 @@ class _TvSidebarState extends ConsumerState<TvSidebar> {
                 padding: EdgeInsets.symmetric(horizontal: m.spacingMd),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? TvDesignTokens.brand.withOpacity(0.15)
+                      ? TvDesignTokens.brand.withValues(alpha: 0.15)
                       : null,
                   borderRadius: BorderRadius.circular(m.posterRadius),
                 ),
