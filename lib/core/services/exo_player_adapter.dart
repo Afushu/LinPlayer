@@ -24,6 +24,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
   bool _isBuffering = false;
   bool _isCompleted = false;
   Duration _position = Duration.zero;
+  Duration _bufferedPosition = Duration.zero;
   Duration _duration = Duration.zero;
   double _speed = 1.0;
   double _volume = 1.0;
@@ -77,11 +78,8 @@ class ExoPlayerAdapter implements PlayerAdapter {
     if (dur <= 0) return 0.0;
     return _position.inMilliseconds / dur;
   }
-  // ponytail: ExoPlayer 原生有 bufferedPosition，但取值要加 Kotlin
-  // getBufferedPosition 方法通道；暂返回零（进度条缓冲层隐藏，不显假进度），
-  // 待确认 exo 内核需要再补原生侧。media_kit/原生 mpv 已能显示缓存进度。
   @override
-  Duration get bufferedPosition => Duration.zero;
+  Duration get bufferedPosition => _bufferedPosition;
   @override
   bool get hasError => _errorMessage != null;
   @override
@@ -491,6 +489,11 @@ class ExoPlayerAdapter implements PlayerAdapter {
       final dur = await _channel.invokeMethod<int>('getDuration', {'playerId': _playerId});
       if (dur != null && dur > 0) {
         _duration = Duration(milliseconds: dur);
+      }
+      final buf = await _channel
+          .invokeMethod<int>('getBufferedPosition', {'playerId': _playerId});
+      if (buf != null && buf > 0) {
+        _bufferedPosition = Duration(milliseconds: buf);
       }
     } catch (_) {}
   }

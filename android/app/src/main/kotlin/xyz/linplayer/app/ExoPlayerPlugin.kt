@@ -154,6 +154,11 @@ class ExoPlayerPlugin(
                 val dur = getPlayer(playerId)?.exoPlayer?.duration?.toInt() ?: 0
                 result.success(if (dur > 0) dur else 0)
             }
+            "getBufferedPosition" -> {
+                val playerId = call.argument<String>("playerId") ?: ""
+                val buf = getPlayer(playerId)?.exoPlayer?.bufferedPosition?.toInt() ?: 0
+                result.success(if (buf > 0) buf else 0)
+            }
             "getVideoSize" -> {
                 val playerId = call.argument<String>("playerId") ?: ""
                 val size = getPlayer(playerId)?.getVideoSize()
