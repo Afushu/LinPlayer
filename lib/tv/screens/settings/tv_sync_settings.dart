@@ -15,6 +15,7 @@ import '../../../core/services/sync/trakt_sync_service.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_grid.dart';
 import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 
@@ -32,7 +33,8 @@ class TvSyncSettings extends ConsumerWidget {
     final writebackProgress = ref.watch(crossServerWritebackProgressProvider);
     return ListView(
       padding: EdgeInsets.all(m.spacingXl),
-      children: [
+      // 连续的开关/动作卡分 2 列，分区标题/间距仍整宽穿插。
+      children: tvGridifyFocusables([
         Text(
           '同步记录',
           style: TextStyle(
@@ -134,7 +136,7 @@ class TvSyncSettings extends ConsumerWidget {
           value: ref.watch(premiumUnlockedProvider) ? '已解锁' : '赞助解锁',
           onSelect: () => _openCalendar(context, ref),
         ),
-      ],
+      ], minCellWidth: 560),
     );
   }
 

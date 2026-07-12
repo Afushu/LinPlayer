@@ -24,6 +24,7 @@ import '../../services/mihomo_service.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_grid.dart';
 import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 import 'tv_sync_settings.dart';
@@ -1132,7 +1133,8 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
                 color: TvDesignTokens.textPrimary,
                 fontWeight: FontWeight.bold)),
         SizedBox(height: m.spacingLg),
-        ...items,
+        // 右侧内容改多列网格：连续设置卡分 2 列，分区标题/间距仍整宽穿插。
+        ...tvGridifyFocusables(items, minCellWidth: 560),
       ],
     );
   }

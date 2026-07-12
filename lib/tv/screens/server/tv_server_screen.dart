@@ -10,6 +10,7 @@ import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_button.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_grid.dart';
 import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 
@@ -56,21 +57,24 @@ class TvServerScreen extends ConsumerWidget {
             Expanded(
               child: servers.isEmpty
                   ? _buildEmpty(context, m)
-                  : ListView(
-                      children: [
-                        for (final entry in servers.asMap().entries)
-                          _buildServerCard(
-                            context,
-                            ref,
-                            entry.value,
-                            m,
-                            isCurrent: entry.value.id == current?.id,
-                            autofocus: entry.key == 0,
-                          ).animate().fadeIn(
-                                delay: Duration(milliseconds: 40 * entry.key),
-                                duration: TvDesignTokens.contentFadeDuration,
-                              ),
-                      ],
+                  : SingleChildScrollView(
+                      child: TvResponsiveGrid(
+                        minCellWidth: 520,
+                        children: [
+                          for (final entry in servers.asMap().entries)
+                            _buildServerCard(
+                              context,
+                              ref,
+                              entry.value,
+                              m,
+                              isCurrent: entry.value.id == current?.id,
+                              autofocus: entry.key == 0,
+                            ).animate().fadeIn(
+                                  delay: Duration(milliseconds: 40 * entry.key),
+                                  duration: TvDesignTokens.contentFadeDuration,
+                                ),
+                        ],
+                      ),
                     ),
             ),
           ],

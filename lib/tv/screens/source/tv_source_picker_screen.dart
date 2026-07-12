@@ -6,6 +6,7 @@ import '../../../core/sources/source_registry.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_grid.dart';
 
 /// TV 端「源类型选择器」：添加服务器第一步。观感对齐移动端
 /// [SourcePickerScreen]（搜索框 + 一列 accent 图标卡片），交互换成焦点驱动。
@@ -35,7 +36,7 @@ class _TvSourcePickerScreenState extends State<TvSourcePickerScreen> {
       backgroundColor: TvDesignTokens.background,
       body: Center(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: m.s(820)),
+          constraints: BoxConstraints(maxWidth: m.s(1400)),
           child: SingleChildScrollView(
             padding: EdgeInsets.all(m.spacingXxl),
             child: Column(
@@ -65,18 +66,18 @@ class _TvSourcePickerScreenState extends State<TvSourcePickerScreen> {
                     ),
                   )
                 else
-                  ...List.generate(types.length, (i) {
-                    final t = types[i];
-                    return Padding(
-                      padding: EdgeInsets.only(bottom: m.spacingMd),
-                      child: TvFocusable(
+                  TvResponsiveGrid(
+                    minCellWidth: 460,
+                    children: List.generate(types.length, (i) {
+                      final t = types[i];
+                      return TvFocusable(
                         autofocus: i == 0,
                         padding: EdgeInsets.all(m.s(4)),
                         onSelect: () => _select(context, t.kind),
                         child: _card(m, t),
-                      ),
-                    );
-                  }),
+                      );
+                    }),
+                  ),
               ],
             ),
           ),

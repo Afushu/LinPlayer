@@ -14,6 +14,7 @@ import '../../../ui/widgets/common/media_widgets.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_grid.dart';
 import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 
@@ -109,26 +110,37 @@ class TvAniRssSubscriptionsTab extends ConsumerWidget {
     if (sorted.isEmpty && unmatched.isEmpty) {
       return _centerHint(m, '暂无订阅，点「添加订阅」开始');
     }
-    return ListView(
-      children: [
-        for (final ani in sorted)
-          _SubscriptionRow(
-            ani: ani,
-            episodes: match.byAni[ani.id] ?? const [],
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TvResponsiveGrid(
+            minCellWidth: 560,
+            children: [
+              for (final ani in sorted)
+                _SubscriptionRow(
+                  ani: ani,
+                  episodes: match.byAni[ani.id] ?? const [],
+                ),
+            ],
           ),
-        if (unmatched.isNotEmpty) ...[
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-                m.spacingXs, m.spacingLg, m.spacingXs, m.spacingSm),
-            child: Text('未匹配下载',
-                style: TextStyle(
-                    fontSize: m.fontSizeMd,
-                    color: TvDesignTokens.textPrimary,
-                    fontWeight: FontWeight.w600)),
-          ),
-          for (final t in unmatched) _UnmatchedRow(torrent: t),
+          if (unmatched.isNotEmpty) ...[
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                  m.spacingXs, m.spacingLg, m.spacingXs, m.spacingSm),
+              child: Text('未匹配下载',
+                  style: TextStyle(
+                      fontSize: m.fontSizeMd,
+                      color: TvDesignTokens.textPrimary,
+                      fontWeight: FontWeight.w600)),
+            ),
+            TvResponsiveGrid(
+              minCellWidth: 560,
+              children: [for (final t in unmatched) _UnmatchedRow(torrent: t)],
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 

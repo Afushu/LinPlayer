@@ -199,52 +199,74 @@ class _TvCalendarScreenState extends ConsumerState<TvCalendarScreen> {
           );
         }
         final sections = groupCalendarEntries(entries);
-        return ListView.builder(
-          padding: EdgeInsets.only(bottom: m.spacingXl),
-          itemCount: sections.length,
-          itemBuilder: (context, i) {
-            final sec = sections[i];
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: m.spacingMd),
-                  child: Row(
+        // TV 横向布局：一天一列并排，整体横向滚动，每列内部纵向滚动。
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final sec in sections)
+                Container(
+                  width: m.s(360),
+                  margin: EdgeInsets.only(right: m.spacingLg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        sec.header,
-                        style: TextStyle(
-                          fontSize: m.fontSizeLg,
-                          color: sec.isToday
-                              ? TvDesignTokens.brand
-                              : TvDesignTokens.textPrimary,
-                          fontWeight: FontWeight.bold,
+                      _dayHeader(m, sec),
+                      SizedBox(height: m.spacingSm),
+                      Expanded(
+                        child: ListView(
+                          padding: EdgeInsets.only(bottom: m.spacingXl),
+                          children: [
+                            for (final e in sec.items) _entry(m, e),
+                          ],
                         ),
                       ),
-                      if (sec.isToday) ...[
-                        SizedBox(width: m.spacingSm),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: m.spacingSm, vertical: m.spacingXs / 2),
-                          decoration: BoxDecoration(
-                            color: TvDesignTokens.brand.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(m.s(6)),
-                          ),
-                          child: Text('今天',
-                              style: TextStyle(
-                                  fontSize: m.fontSizeXs,
-                                  color: TvDesignTokens.brand)),
-                        ),
-                      ],
                     ],
                   ),
                 ),
-                ...sec.items.map((e) => _entry(m, e)),
-              ],
-            );
-          },
+            ],
+          ),
         );
       },
+    );
+  }
+
+  Widget _dayHeader(TvMetrics m, CalendarSection sec) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: m.spacingMd),
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(
+              sec.header,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: m.fontSizeLg,
+                color: sec.isToday
+                    ? TvDesignTokens.brand
+                    : TvDesignTokens.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          if (sec.isToday) ...[
+            SizedBox(width: m.spacingSm),
+            Container(
+              padding: EdgeInsets.symmetric(
+                  horizontal: m.spacingSm, vertical: m.spacingXs / 2),
+              decoration: BoxDecoration(
+                color: TvDesignTokens.brand.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(m.s(6)),
+              ),
+              child: Text('今天',
+                  style: TextStyle(
+                      fontSize: m.fontSizeXs, color: TvDesignTokens.brand)),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

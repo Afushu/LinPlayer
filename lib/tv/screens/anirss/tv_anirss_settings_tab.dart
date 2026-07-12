@@ -13,6 +13,7 @@ import '../../../core/sources/anirss/models/log_entry.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_grid.dart';
 import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 
@@ -155,8 +156,12 @@ class _TvAniRssSettingsTabState extends ConsumerState<TvAniRssSettingsTab> {
                     color: TvDesignTokens.brand,
                     fontWeight: FontWeight.w600)),
           ),
-          for (final field in section.fields)
-            _buildField(m, field, draft),
+          TvResponsiveGrid(
+            minCellWidth: 560,
+            children: [
+              for (final field in section.fields) _buildField(m, field, draft),
+            ],
+          ),
         ],
         SizedBox(height: m.spacingLg),
         TvFocusable(
@@ -347,7 +352,8 @@ class _ServerManagementCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final m = context.tv;
-    return Column(
+    return TvResponsiveGrid(
+      minCellWidth: 560,
       children: [
         _infoTile(m, Icons.dns_rounded, server.name, server.activeLineUrl),
         if (server.lines.length > 1)
@@ -634,7 +640,8 @@ class _TvDiagnosticsSectionState extends ConsumerState<_TvDiagnosticsSection> {
   @override
   Widget build(BuildContext context) {
     final m = context.tv;
-    return Column(
+    return TvResponsiveGrid(
+      minCellWidth: 560,
       children: [
         _tile(m, Icons.wifi_tethering, '存活测试', '检测服务是否在线',
             () => _run('ping', (a) => a.ping(), '服务在线')),

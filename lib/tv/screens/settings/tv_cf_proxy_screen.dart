@@ -7,6 +7,7 @@ import '../../../core/providers/server_providers.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_grid.dart';
 import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 
@@ -115,7 +116,10 @@ class _TvCfProxyScreenState extends ConsumerState<TvCfProxyScreen> {
                 ),
               )
             else
-              for (final s in servers) _serverBlock(m, s),
+              TvResponsiveGrid(
+                minCellWidth: 600,
+                children: [for (final s in servers) _serverBlock(m, s)],
+              ),
           ],
         ),
       ),

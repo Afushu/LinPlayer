@@ -9,6 +9,7 @@ import '../../../core/widgets/app_shimmer.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_grid.dart';
 import '../../widgets/tv_toast.dart';
 
 /// TV 端「插件」面板（遥控器友好）。
@@ -106,7 +107,10 @@ class _TvPluginScreenState extends ConsumerState<TvPluginScreen> {
             if (installed.isEmpty)
               _hint(m, '还没有安装任何插件，从下方插件市场选择安装。')
             else
-              for (final info in installed) _installedRow(m, info),
+              TvResponsiveGrid(
+                minCellWidth: 560,
+                children: [for (final info in installed) _installedRow(m, info)],
+              ),
             SizedBox(height: m.spacingLg),
             Row(
               children: [
@@ -142,7 +146,10 @@ class _TvPluginScreenState extends ConsumerState<TvPluginScreen> {
         if (list.isEmpty) {
           return _hint(m, '仓库暂无适配 TV 的插件。');
         }
-        return Column(children: [for (final p in list) _storeRow(m, p)]);
+        return TvResponsiveGrid(
+          minCellWidth: 560,
+          children: [for (final p in list) _storeRow(m, p)],
+        );
       },
     );
   }

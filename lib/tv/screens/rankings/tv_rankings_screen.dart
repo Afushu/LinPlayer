@@ -9,6 +9,7 @@ import '../../../ui/widgets/common/ranking_entry_panel.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_grid.dart';
 
 /// TV 排行榜（观感对齐移动端）：顶部一级分组胶囊 + 子类胶囊，下方名次列表。
 /// 前三名金/银/铜大号名次 + 封面 + 评分。交互全部换成遥控器焦点驱动，
@@ -124,11 +125,26 @@ class _RankingList extends ConsumerWidget {
         if (items.isEmpty) {
           return _emptyState(m, Icons.inbox_outlined, '暂无数据');
         }
-        return ListView.builder(
+        final top = items.take(3).toList();
+        final rest =
+            items.length > 3 ? items.sublist(3) : const <RankingEntry>[];
+        return SingleChildScrollView(
           padding: EdgeInsets.only(bottom: m.spacingXl),
-          itemCount: items.length,
-          itemBuilder: (context, i) =>
-              _RankRow(entry: items[i], autofocus: i == 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Podium(top: top),
+              if (rest.isNotEmpty) ...[
+                SizedBox(height: m.spacingLg),
+                TvResponsiveGrid(
+                  minCellWidth: 640,
+                  children: [
+                    for (final e in rest) _RankRow(entry: e),
+                  ],
+                ),
+              ],
+            ],
+          ),
         );
       },
     );
@@ -136,16 +152,14 @@ class _RankingList extends ConsumerWidget {
 }
 
 class _RankRow extends StatelessWidget {
-  const _RankRow({required this.entry, this.autofocus = false});
+  const _RankRow({required this.entry});
 
   final RankingEntry entry;
-  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
     final m = context.tv;
     return TvFocusable(
-      autofocus: autofocus,
       onSelect: () => showRankingEntryDialog(context, entry),
       padding:
           EdgeInsets.symmetric(vertical: m.spacingXs, horizontal: m.spacingSm),
@@ -214,6 +228,115 @@ class _RankRow extends StatelessWidget {
             ),
             if (entry.rating != null && entry.rating! > 0) ...[
               SizedBox(width: m.spacingSm),
+              _ratingChip(m, entry.rating!),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 前三名领奖台：亚军-冠军-季军三列，冠军居中最高、品牌色高亮。
+/// 兼容不足 3 条（0/1/2）的榜单。
+class _Podium extends StatelessWidget {
+  const _Podium({required this.top});
+
+  /// 已按名次升序，index 0 = 第 1 名（长度 1~3）。
+  final List<RankingEntry> top;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = context.tv;
+    final rank1 = top[0];
+    final rank2 = top.length > 1 ? top[1] : null;
+    final rank3 = top.length > 2 ? top[2] : null;
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: m.spacingMd),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (rank2 != null) _PodiumCard(entry: rank2, big: false),
+          _PodiumCard(entry: rank1, big: true, autofocus: true),
+          if (rank3 != null) _PodiumCard(entry: rank3, big: false),
+        ],
+      ),
+    );
+  }
+}
+
+class _PodiumCard extends StatelessWidget {
+  const _PodiumCard({
+    required this.entry,
+    required this.big,
+    this.autofocus = false,
+  });
+
+  final RankingEntry entry;
+  final bool big;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = context.tv;
+    final w = m.s(big ? 210 : 168);
+    final h = m.s(big ? 294 : 236);
+    final highlight = entry.rank == 1;
+    final accent = _rankColor(entry.rank) ?? TvDesignTokens.textSecondary;
+    return TvFocusable(
+      autofocus: autofocus,
+      onSelect: () => showRankingEntryDialog(context, entry),
+      padding: EdgeInsets.all(m.spacingSm),
+      child: SizedBox(
+        width: w,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${entry.rank}',
+              style: TextStyle(
+                fontSize: big ? m.fontSizeXxl : m.fontSizeXl,
+                fontWeight: FontWeight.w900,
+                fontStyle: FontStyle.italic,
+                color: accent,
+              ),
+            ),
+            SizedBox(height: m.spacingSm),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(m.s(10)),
+                border: highlight
+                    ? Border.all(color: TvDesignTokens.brand, width: m.s(3))
+                    : null,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(m.s(8)),
+                child: MediaImage(
+                  imageUrl: entry.imageUrl,
+                  width: w,
+                  height: h,
+                  fit: BoxFit.cover,
+                  cacheWidth: big ? 420 : 340,
+                ),
+              ),
+            ),
+            SizedBox(height: m.spacingSm),
+            Text(
+              entry.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: m.fontSizeMd,
+                color: highlight
+                    ? TvDesignTokens.brand
+                    : TvDesignTokens.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (entry.rating != null && entry.rating! > 0) ...[
+              SizedBox(height: m.spacingXs),
               _ratingChip(m, entry.rating!),
             ],
           ],

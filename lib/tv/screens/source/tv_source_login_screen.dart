@@ -123,155 +123,189 @@ class _TvSourceLoginScreenState extends ConsumerState<TvSourceLoginScreen> {
   @override
   Widget build(BuildContext context) {
     final m = context.tv;
-    final d = _descriptor;
+    // 电视横版双栏：左品牌介绍，右登录表单（夸克扫码/Cookie、账密型地址）。
     return Scaffold(
       backgroundColor: TvDesignTokens.background,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: m.s(720)),
-          child: SingleChildScrollView(
-            padding: EdgeInsets.all(m.spacingXxl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // accent 图标头部（对齐移动端）。
-                Row(
-                  children: [
-                    Container(
-                      width: m.s(56),
-                      height: m.s(56),
-                      decoration: BoxDecoration(
-                        color: d.accent.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(m.posterRadius),
-                      ),
-                      child: Icon(d.icon, color: d.accent, size: m.s(30)),
-                    ),
-                    SizedBox(width: m.spacingLg),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '添加 ${d.name}',
-                            style: TextStyle(
-                              fontSize: m.fontSizeXxl,
-                              color: TvDesignTokens.textPrimary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: m.spacingXs),
-                          Text(
-                            d.subtitle,
-                            style: TextStyle(
-                              fontSize: m.fontSizeSm,
-                              color: TvDesignTokens.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: m.spacingXl),
-                _field(
-                  m: m,
-                  label: '备注名称（可选）',
-                  controller: _nameController,
-                  prefixIcon: Icons.label_outline,
-                ),
-                SizedBox(height: m.spacingLg),
-                if (_isQuark) ...[
-                  _quarkMethodToggle(m),
-                  SizedBox(height: m.spacingLg),
-                  if (_quarkMethod == 0)
-                    Center(
-                      child: QuarkQrLoginView(
-                        currentName: () => _nameController.text,
-                        onSuccess: _onLoggedIn,
-                      ),
-                    )
-                  else
-                    _field(
-                      m: m,
-                      label: 'Cookie',
-                      controller: _cookieController,
-                      hint: '__pus=...; __puus=...; ...',
-                      autofocus: true,
-                      maxLines: 4,
-                      prefixIcon: Icons.cookie_outlined,
-                    ),
-                ] else ...[
-                  _field(
-                    m: m,
-                    label: '服务器地址',
-                    controller: _urlController,
-                    hint: 'https://example.com:5244',
-                    autofocus: true,
-                    keyboardType: TextInputType.url,
-                    prefixIcon: Icons.link,
-                  ),
-                  SizedBox(height: m.spacingLg),
-                  _field(
-                    m: m,
-                    label: '用户名',
-                    controller: _userController,
-                    prefixIcon: Icons.person_outline,
-                  ),
-                  SizedBox(height: m.spacingLg),
-                  _field(
-                    m: m,
-                    label: '密码',
-                    controller: _passController,
-                    obscure: true,
-                    prefixIcon: Icons.lock_outline,
-                  ),
+      body: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: m.s(1360)),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: m.spacingXxl,
+                vertical: m.spacingXl,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 5, child: _infoPane(m)),
+                  SizedBox(width: m.spacingXxl),
+                  Expanded(flex: 6, child: _formPane(m)),
                 ],
-                if (_error != null) ...[
-                  SizedBox(height: m.spacingLg),
-                  Text(
-                    _error!,
-                    style: TextStyle(
-                      fontSize: m.fontSizeSm,
-                      color: TvDesignTokens.error,
-                    ),
-                  ).animate().shake(duration: 400.ms),
-                ],
-                SizedBox(height: m.spacingXl),
-                Row(
-                  children: [
-                    // 扫码方式无需「连接」按钮（扫码确认后自动完成）。
-                    if (!(_isQuark && _quarkMethod == 0)) ...[
-                      if (_loading)
-                        Padding(
-                          padding: EdgeInsets.only(right: m.spacingLg),
-                          child: SizedBox(
-                            width: m.s(28),
-                            height: m.s(28),
-                            child: const CircularProgressIndicator(
-                              color: TvDesignTokens.brand,
-                              strokeWidth: 3,
-                            ),
-                          ),
-                        ),
-                      TvButton(
-                        text: _loading ? '连接中…' : '登录并添加',
-                        icon: Icons.link,
-                        onPressed: _loading ? null : _connect,
-                      ),
-                      SizedBox(width: m.spacingMd),
-                    ],
-                    TvButton(
-                      text: '取消',
-                      outlined: true,
-                      onPressed: () => Navigator.of(context).maybePop(),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// 左栏：源类型品牌介绍（accent 图标 + 名称 + 说明）。
+  Widget _infoPane(TvMetrics m) {
+    final d = _descriptor;
+    return Container(
+      padding: EdgeInsets.all(m.spacingXl),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            d.accent.withValues(alpha: 0.20),
+            d.accent.withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(m.s(20)),
+        border: Border.all(color: d.accent.withValues(alpha: 0.32), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: m.s(96),
+            height: m.s(96),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: d.accent.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(m.s(20)),
+            ),
+            child: Icon(d.icon, color: d.accent, size: m.s(52)),
+          ),
+          SizedBox(height: m.spacingLg),
+          Text(
+            '添加 ${d.name}',
+            style: TextStyle(
+              fontSize: m.fontSizeXxl,
+              color: TvDesignTokens.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: m.spacingSm),
+          Text(
+            d.subtitle,
+            style: TextStyle(
+              fontSize: m.fontSizeMd,
+              color: TvDesignTokens.textSecondary,
+              height: TvDesignTokens.lineHeightRelaxed,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 右栏：登录表单（备注名 + 夸克扫码/Cookie 或 账密地址 + 按钮）。
+  Widget _formPane(TvMetrics m) {
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _field(
+            m: m,
+            label: '备注名称（可选）',
+            controller: _nameController,
+            prefixIcon: Icons.label_outline,
+          ),
+          SizedBox(height: m.spacingLg),
+          if (_isQuark) ...[
+            _quarkMethodToggle(m),
+            SizedBox(height: m.spacingLg),
+            if (_quarkMethod == 0)
+              Center(
+                child: QuarkQrLoginView(
+                  currentName: () => _nameController.text,
+                  onSuccess: _onLoggedIn,
+                ),
+              )
+            else
+              _field(
+                m: m,
+                label: 'Cookie',
+                controller: _cookieController,
+                hint: '__pus=...; __puus=...; ...',
+                autofocus: true,
+                maxLines: 4,
+                prefixIcon: Icons.cookie_outlined,
+              ),
+          ] else ...[
+            _field(
+              m: m,
+              label: '服务器地址',
+              controller: _urlController,
+              hint: 'https://example.com:5244',
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              prefixIcon: Icons.link,
+            ),
+            SizedBox(height: m.spacingLg),
+            _field(
+              m: m,
+              label: '用户名',
+              controller: _userController,
+              prefixIcon: Icons.person_outline,
+            ),
+            SizedBox(height: m.spacingLg),
+            _field(
+              m: m,
+              label: '密码',
+              controller: _passController,
+              obscure: true,
+              prefixIcon: Icons.lock_outline,
+            ),
+          ],
+          if (_error != null) ...[
+            SizedBox(height: m.spacingLg),
+            Text(
+              _error!,
+              style: TextStyle(
+                fontSize: m.fontSizeSm,
+                color: TvDesignTokens.error,
+              ),
+            ).animate().shake(duration: 400.ms),
+          ],
+          SizedBox(height: m.spacingXl),
+          Row(
+            children: [
+              // 扫码方式无需「连接」按钮（扫码确认后自动完成）。
+              if (!(_isQuark && _quarkMethod == 0)) ...[
+                if (_loading)
+                  Padding(
+                    padding: EdgeInsets.only(right: m.spacingLg),
+                    child: SizedBox(
+                      width: m.s(28),
+                      height: m.s(28),
+                      child: const CircularProgressIndicator(
+                        color: TvDesignTokens.brand,
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ),
+                TvButton(
+                  text: _loading ? '连接中…' : '登录并添加',
+                  icon: Icons.link,
+                  onPressed: _loading ? null : _connect,
+                ),
+                SizedBox(width: m.spacingMd),
+              ],
+              TvButton(
+                text: '取消',
+                outlined: true,
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

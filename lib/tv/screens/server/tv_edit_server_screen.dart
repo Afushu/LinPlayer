@@ -187,70 +187,91 @@ class _TvEditServerScreenState extends ConsumerState<TvEditServerScreen> {
       );
     }
 
+    // 电视横版双栏：左「基本信息」，右「线路管理」；顶部标题、底部保存/取消。
     return Scaffold(
       backgroundColor: TvDesignTokens.background,
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: m.s(900)),
-            child: ListView(
-              padding: EdgeInsets.all(m.spacingXl),
-              children: [
-                Row(
+        child: Padding(
+          padding: EdgeInsets.all(m.spacingXl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  TvFocusable(
+                    autofocus: true,
+                    padding: EdgeInsets.all(m.spacingXs),
+                    onSelect: () => context.pop(),
+                    child: Icon(Icons.arrow_back,
+                        color: TvDesignTokens.textPrimary, size: m.s(32)),
+                  ),
+                  SizedBox(width: m.spacingMd),
+                  Text(
+                    '编辑服务器',
+                    style: TextStyle(
+                      fontSize: m.fontSizeXxl,
+                      color: TvDesignTokens.textPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: m.spacingLg),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TvFocusable(
-                      autofocus: true,
-                      padding: EdgeInsets.all(m.spacingXs),
+                    Expanded(
+                      flex: 5,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionTitle('基本信息', m),
+                            SizedBox(height: m.spacingMd),
+                            _field(m, '服务器名称', _nameCtrl),
+                            SizedBox(height: m.spacingMd),
+                            _field(m, '备注信息', _remarkCtrl),
+                            SizedBox(height: m.spacingMd),
+                            _buildIconField(m),
+                            SizedBox(height: m.spacingMd),
+                            _buildInsecureTlsToggle(m),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: m.spacingXxl),
+                    Expanded(
+                      flex: 6,
+                      child: SingleChildScrollView(
+                        child: _buildLinesSection(m),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: m.spacingLg),
+              Row(
+                children: [
+                  Expanded(
+                    child: TvFocusable(
+                      padding: EdgeInsets.all(m.s(4)),
                       onSelect: () => context.pop(),
-                      child: Icon(Icons.arrow_back,
-                          color: TvDesignTokens.textPrimary, size: m.s(32)),
+                      child: const TvDialogButton('取消', fullWidth: true),
                     ),
-                    SizedBox(width: m.spacingMd),
-                    Text(
-                      '编辑服务器',
-                      style: TextStyle(
-                        fontSize: m.fontSizeXxl,
-                        color: TvDesignTokens.textPrimary,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  ),
+                  SizedBox(width: m.spacingMd),
+                  Expanded(
+                    child: TvFocusable(
+                      padding: EdgeInsets.all(m.s(4)),
+                      onSelect: _save,
+                      child: const TvDialogButton('保存',
+                          filled: true, fullWidth: true),
                     ),
-                  ],
-                ),
-                SizedBox(height: m.spacingXl),
-                _sectionTitle('基本信息', m),
-                SizedBox(height: m.spacingMd),
-                _field(m, '服务器名称', _nameCtrl),
-                SizedBox(height: m.spacingMd),
-                _field(m, '备注信息', _remarkCtrl),
-                SizedBox(height: m.spacingMd),
-                _buildIconField(m),
-                SizedBox(height: m.spacingMd),
-                _buildInsecureTlsToggle(m),
-                SizedBox(height: m.spacingXl),
-                _buildLinesSection(m),
-                SizedBox(height: m.spacingXl),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TvFocusable(
-                        padding: EdgeInsets.all(m.s(4)),
-                        onSelect: () => context.pop(),
-                        child: const TvDialogButton('取消', fullWidth: true),
-                      ),
-                    ),
-                    SizedBox(width: m.spacingMd),
-                    Expanded(
-                      child: TvFocusable(
-                        padding: EdgeInsets.all(m.s(4)),
-                        onSelect: _save,
-                        child: const TvDialogButton('保存',
-                            filled: true, fullWidth: true),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
