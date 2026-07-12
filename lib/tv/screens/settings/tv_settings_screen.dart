@@ -169,6 +169,7 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
     final audioRegex = ref.watch(preferredAudioRegexProvider);
 
     return _settingsList(m, '播放设置', [
+      _groupLabel(m, '内核与解码'),
       _choiceItem<String>(
         m,
         title: '播放器内核',
@@ -181,6 +182,7 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         onPick: (v) =>
             ref.read(playerCoreProvider.notifier).state = v,
       ),
+      _groupLabel(m, '播放行为'),
       _choiceItem<double>(
         m,
         title: '默认倍速',
@@ -267,6 +269,7 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         onToggle: () => ref.read(preloadEnabledProvider.notifier).state =
             !preloadEnabled,
       ),
+      _groupLabel(m, '加载与聚合'),
       ..._mtlItems(m),
       ..._aggregationItems(m),
       _toggleItem(
@@ -277,6 +280,7 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         onToggle: () => ref.read(strmDirectPlayProvider.notifier).state =
             !strmDirectPlay,
       ),
+      _groupLabel(m, '渲染与解码'),
       _toggleItem(
         m,
         title: 'ExoPlayer ASS 字幕（libass）',
@@ -301,6 +305,7 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         onToggle: () =>
             ref.read(dolbyAutoGpuNextSwProvider.notifier).state = !dolbyAuto,
       ),
+      _groupLabel(m, '轨道偏好'),
       _textItem(
         m,
         title: '版本筛选（正则）',
@@ -1113,6 +1118,23 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
   }
 
   // ============ 复用控件 ============
+
+  /// 分组小标题：整宽穿插在设置项之间（tvGridifyFocusables 会把非 TvFocusable
+  /// 的 Padding 当整宽分隔），把长列表切成好扫的段。
+  Widget _groupLabel(TvMetrics m, String text) {
+    return Padding(
+      padding: EdgeInsets.only(left: 4, top: m.spacingLg, bottom: m.spacingSm),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: m.fontSizeXs,
+          color: TvDesignTokens.textDisabled,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 2,
+        ),
+      ),
+    );
+  }
 
   Widget _settingsList(TvMetrics m, String title, List<Widget> items) {
     return ListView(

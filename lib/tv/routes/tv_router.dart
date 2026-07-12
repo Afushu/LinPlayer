@@ -20,6 +20,7 @@ import '../screens/settings/tv_config_qr_screen.dart';
 import '../screens/anirss/tv_anirss_detail_screen.dart';
 import '../../core/sources/anirss/anirss_nav_args.dart';
 import '../screens/detail/tv_detail_screen.dart';
+import '../screens/detail/tv_episode_detail_screen.dart';
 import '../screens/player/tv_player_screen.dart';
 import '../screens/onboarding/tv_onboarding_screen.dart';
 import '../shell/tv_shell.dart';
@@ -110,6 +111,13 @@ final tvRouter = GoRouter(
         final mediaId = state.pathParameters['mediaId'];
         return TvDetailScreen(mediaId: mediaId);
       },
+    ),
+    // 集详情（单集中间页，独立全屏；选集/继续观看进入，可播放/换集/换服）
+    GoRoute(
+      path: '/tv/episode/:mediaId',
+      builder: (context, state) => TvEpisodeDetailScreen(
+        mediaId: state.pathParameters['mediaId'],
+      ),
     ),
     // Ani-rss 详情页（独立页面，无导航栏；Ani 对象经 extra 传）
     GoRoute(

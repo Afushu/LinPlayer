@@ -125,19 +125,19 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildActionButtons(item, m),
-                // 其他服务器版本（聚合栏）
-                _buildAggregationBar(item, m),
-                // 选集列表放在「简介」之上，方便遥控器直接选集切换。
                 if (isSeries) ...[
+                  // 剧：聚合栏 + 季/选集大网格（单栏，选集是主角）+ 简介 + 演员。
+                  _buildAggregationBar(item, m),
                   SizedBox(height: m.spacingLg),
                   _buildSeasonsAndEpisodes(api, item, m),
-                ],
-                if (item.overview != null && item.overview!.isNotEmpty) ...[
-                  SizedBox(height: m.spacingLg),
-                  _buildSynopsis(item.overview!, m),
-                ],
-                // 电影：版本信息卡（复用移动端 MediaSourceInfoCard）。
-                if (!isSeries) _buildVersionInfo(item.id, m),
+                  if (item.overview != null && item.overview!.isNotEmpty) ...[
+                    SizedBox(height: m.spacingLg),
+                    _buildSynopsis(item.overview!, m),
+                  ],
+                  _buildCast(api, item, m),
+                ] else
+                  // 电影：左(简介+演员) 右(版本信息+其他服务器版本) 双栏。
+                  _buildMovieBody(api, item, m),
                 SizedBox(height: m.spacingXxl),
               ],
             ),
@@ -542,6 +542,122 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
     }
   }
 
+  /// 电影正文双栏：左「简介 + 演员」，右「版本信息 + 其他服务器版本」。
+  /// 10-foot 上双栏比长列表少上下翻，遥控器左右即可跨栏。
+  Widget _buildMovieBody(ApiClientFactory api, MediaItem item, TvMetrics m) {
+    final left = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (item.overview != null && item.overview!.isNotEmpty)
+          _buildSynopsis(item.overview!, m),
+        _buildCast(api, item, m),
+      ],
+    );
+    final right = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildVersionInfo(item.id, m),
+        _buildAggregationBar(item, m),
+      ],
+    );
+    return Padding(
+      padding: EdgeInsets.only(top: m.spacingLg),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: 3, child: left),
+          SizedBox(width: m.spacingXxl),
+          Expanded(flex: 2, child: right),
+        ],
+      ),
+    );
+  }
+
+  /// 演员表：圆形头像 + 姓名 + 角色，横向可聚焦浏览（纯展示，OK 无动作）。
+  Widget _buildCast(ApiClientFactory api, MediaItem item, TvMetrics m) {
+    final people = (item.people ?? [])
+        .where((p) => p.type == null || p.type == 'Actor' || p.role != null)
+        .take(20)
+        .toList(growable: false);
+    if (people.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: m.spacingLg),
+        Text(
+          '演员',
+          style: TextStyle(
+            fontSize: m.fontSizeLg,
+            color: TvDesignTokens.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: m.spacingMd),
+        SizedBox(
+          height: m.s(150),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: people.length,
+            separatorBuilder: (_, __) => SizedBox(width: m.spacingLg),
+            itemBuilder: (context, i) =>
+                TvFocusable(child: _buildPersonCard(api, people[i], m)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPersonCard(ApiClientFactory api, Person p, TvMetrics m) {
+    final double d = m.s(88);
+    final url = p.primaryImageTag != null
+        ? api.image.getPrimaryImageUrl(p.id, tag: p.primaryImageTag, maxWidth: 200)
+        : null;
+    return SizedBox(
+      width: m.s(110),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipOval(
+            child: SizedBox(
+              width: d,
+              height: d,
+              child: url != null
+                  ? MediaImage(imageUrl: url, width: d, height: d, fit: BoxFit.cover)
+                  : ColoredBox(
+                      color: TvDesignTokens.surfaceElevated,
+                      child: Icon(Icons.person,
+                          color: TvDesignTokens.textDisabled, size: m.s(40)),
+                    ),
+            ),
+          ),
+          SizedBox(height: m.spacingXs),
+          Text(
+            p.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: m.fontSizeXs,
+              color: TvDesignTokens.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (p.role != null && p.role!.trim().isNotEmpty)
+            Text(
+              p.role!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: m.fs(11),
+                color: TvDesignTokens.textSecondary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSynopsis(String overview, TvMetrics m) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -838,7 +954,7 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
                 for (final entry in episodes.asMap().entries)
                   TvFocusable(
                     onSelect: () =>
-                        context.push('/tv/player?mediaId=${entry.value.id}'),
+                        context.push('/tv/episode/${entry.value.id}'),
                     child: _buildEpisodeCard(api, entry.value, m),
                   ).animate().fadeIn(
                         delay: Duration(milliseconds: 20 * (entry.key % 12)),

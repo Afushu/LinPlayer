@@ -5,8 +5,11 @@ import '../theme/tv_design_tokens.dart';
 import '../theme/tv_metrics.dart';
 import 'tv_focusable.dart';
 
-/// TV 左侧导航栏
-/// 固定左侧：首页、搜索、服务器、扫码、设置（+ 排行榜按开关显隐，末位对齐路由）。
+/// TV 左侧导航栏（紧凑竖排轨道）
+///
+/// 每个 Tab 是「图标在上、文字在下」的竖排块，整块铺满轨道宽度 —— 既是 10-foot UI
+/// 的常见形态，又给触控留出足够大的点击热区（旧版是居中的窄药丸，Pad 上难点中）。
+/// 固定项：首页、搜索、收藏、服务器、扫码、设置（+ 排行榜按开关显隐，末位对齐路由）。
 class TvSidebar extends ConsumerStatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
@@ -36,76 +39,78 @@ class _TvSidebarState extends ConsumerState<TvSidebar> {
   @override
   Widget build(BuildContext context) {
     final m = context.tv;
-    // 排行榜作为末位项（index 5），与 tv_router / tv_shell 的 _routes 对齐。
+    // 排行榜作为末位项（index 6），与 tv_router / tv_shell 的 _routes 对齐。
     final items = <_NavItem>[
       ..._baseItems,
       if (ref.watch(rankingEnabledProvider))
         const _NavItem(Icons.leaderboard_rounded, '排行榜'),
     ];
-    final width = widget.collapsed
-        ? m.sidebarCollapsedWidth
-        : m.sidebarWidth;
+    // 竖排图标+文字本身就窄，不再需要 240 宽的抽屉；折叠态更窄只留图标。
+    final width = widget.collapsed ? m.s(84) : m.s(120);
 
     return Container(
       width: width,
       color: TvDesignTokens.surface,
-      // 导航项整体垂直居中；每项内容（图标 + 文字）水平居中，
-      // 更贴合 Pad 触控与 TV 对称布局，不再堆在左上角。
-      child: Center(
+      child: SafeArea(
+        right: false,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(vertical: m.spacingMd),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(items.length, (index) {
+                return _buildItem(m, items[index], index);
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildItem(TvMetrics m, _NavItem item, int index) {
+    final isSelected = widget.selectedIndex == index;
+    final Color fg = isSelected
+        ? TvDesignTokens.brand
+        : TvDesignTokens.textSecondary;
+
+    return TvFocusable(
+      // 不 autofocus：初始焦点交给内容区（Hero/首卡/按钮），
+      // 避免与内容 autofocus 抢焦点导致「光标落在看不见的地方」。
+      onSelect: () => widget.onItemSelected(index),
+      padding: EdgeInsets.symmetric(
+        horizontal: m.s(8),
+        vertical: m.s(5),
+      ),
+      borderRadius: m.s(14),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(vertical: m.spacingSm),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? TvDesignTokens.brand.withValues(alpha: 0.15)
+              : null,
+          borderRadius: BorderRadius.circular(m.s(14)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: List.generate(items.length, (index) {
-            final item = items[index];
-            final isSelected = widget.selectedIndex == index;
-
-            return TvFocusable(
-              // 不 autofocus：初始焦点交给内容区（Hero/首卡/按钮），
-              // 避免与内容 autofocus 抢焦点导致「光标落在看不见的地方」。
-              onSelect: () => widget.onItemSelected(index),
-              padding: EdgeInsets.symmetric(
-                horizontal: m.spacingMd,
-                vertical: m.spacingSm,
-              ),
-              child: Container(
-                height: m.sidebarItemHeight,
-                alignment: Alignment.center,
-                padding: EdgeInsets.symmetric(horizontal: m.spacingMd),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? TvDesignTokens.brand.withValues(alpha: 0.15)
-                      : null,
-                  borderRadius: BorderRadius.circular(m.posterRadius),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      item.icon,
-                      color: isSelected
-                          ? TvDesignTokens.brand
-                          : TvDesignTokens.textSecondary,
-                      size: m.sidebarIconSize,
-                    ),
-                    if (!widget.collapsed) ...[
-                      SizedBox(width: m.spacingMd),
-                      Text(
-                        item.label,
-                        style: TextStyle(
-                          fontSize: m.sidebarTextSize,
-                          color: isSelected
-                              ? TvDesignTokens.brand
-                              : TvDesignTokens.textSecondary,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ],
+          children: [
+            Icon(item.icon, color: fg, size: m.sidebarIconSize),
+            if (!widget.collapsed) ...[
+              SizedBox(height: m.s(6)),
+              Text(
+                item.label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: m.fs(13),
+                  color: fg,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 ),
               ),
-            );
-          }),
+            ],
+          ],
         ),
       ),
     );

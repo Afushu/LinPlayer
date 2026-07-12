@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/api/emby_api.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/utils/server_batch_adder.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../services/lan_remote.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_button.dart';
@@ -27,6 +29,30 @@ class _TvAddServerScreenState extends ConsumerState<TvAddServerScreen> {
   final _passController = TextEditingController();
   bool _loading = false;
   String? _error;
+
+  // 局域网扫码添加：进页即启动 LAN 服务，二维码直接显示（不再走「打开扫码页」按钮）。
+  String? _lanUrl;
+  bool _lanStarting = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startLan());
+  }
+
+  Future<void> _startLan() async {
+    try {
+      final url = await ref.read(lanRemoteServerProvider).start();
+      if (mounted) {
+        setState(() {
+          _lanStarting = false;
+          _lanUrl = url;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _lanStarting = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -143,17 +169,39 @@ class _TvAddServerScreenState extends ConsumerState<TvAddServerScreen> {
             color: TvDesignTokens.brand.withValues(alpha: 0.35), width: 1.5),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // 二维码直接显示（免按钮）：进页即扫，把服务器配置推到电视。
           Container(
             padding: EdgeInsets.all(m.spacingLg),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.92),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(m.s(16)),
             ),
-            child: Icon(Icons.qr_code_2,
-                color: const Color(0xFF0B0C10), size: m.s(120)),
+            child: SizedBox(
+              width: m.s(220),
+              height: m.s(220),
+              child: _lanStarting
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                          color: TvDesignTokens.brand, strokeWidth: 3))
+                  : (_lanUrl != null
+                      ? QrImageView(
+                          data: _lanUrl!,
+                          size: m.s(220),
+                          backgroundColor: Colors.white,
+                        )
+                      : Center(
+                          child: Text(
+                            '无法获取局域网地址\n请确认已连接 Wi-Fi',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Colors.black54,
+                                fontSize: m.fontSizeXs),
+                          ),
+                        )),
+            ),
           ),
           SizedBox(height: m.spacingLg),
           Text(
@@ -167,21 +215,12 @@ class _TvAddServerScreenState extends ConsumerState<TvAddServerScreen> {
           ),
           SizedBox(height: m.spacingSm),
           Text(
-            '不想用遥控器打字？打开扫码页，用手机扫一扫，\n直接把服务器配置推到电视。',
+            '手机与电视连同一 Wi-Fi，用相机扫上面的码，\n直接把服务器地址和登录推到电视——不用点任何按钮。',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: m.fontSizeSm,
               color: TvDesignTokens.textSecondary,
               height: TvDesignTokens.lineHeightRelaxed,
-            ),
-          ),
-          SizedBox(height: m.spacingLg),
-          Align(
-            alignment: Alignment.center,
-            child: TvButton(
-              text: '打开扫码页',
-              icon: Icons.qr_code_scanner,
-              onPressed: () => context.go('/tv/scan'),
             ),
           ),
         ],
@@ -196,8 +235,31 @@ class _TvAddServerScreenState extends ConsumerState<TvAddServerScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 步骤条：选择源类型 › 连接 Emby（给多步流程方向感）。
+          Row(
+            children: [
+              Text('选择源类型',
+                  style: TextStyle(
+                      fontSize: m.fontSizeXs,
+                      color: TvDesignTokens.textSecondary,
+                      fontWeight: FontWeight.w700)),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: m.spacingXs),
+                child: Text('›',
+                    style: TextStyle(
+                        fontSize: m.fontSizeXs,
+                        color: TvDesignTokens.textDisabled)),
+              ),
+              Text('连接 Emby',
+                  style: TextStyle(
+                      fontSize: m.fontSizeXs,
+                      color: TvDesignTokens.brandLight,
+                      fontWeight: FontWeight.w700)),
+            ],
+          ),
+          SizedBox(height: m.spacingSm),
           Text(
-            '添加服务器',
+            '添加 Emby 服务器',
             style: TextStyle(
               fontSize: m.fontSizeXxl,
               color: TvDesignTokens.textPrimary,
