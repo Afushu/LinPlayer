@@ -5,6 +5,7 @@ import '../../../plugins/manager/plugin_manager.dart';
 import '../../../plugins/models/plugin_info.dart';
 import '../../../plugins/store/plugin_store.dart';
 import '../../../plugins/ui/plugin_permission_dialog.dart';
+import '../../../core/widgets/app_shimmer.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
@@ -127,7 +128,9 @@ class _TvPluginScreenState extends ConsumerState<TvPluginScreen> {
         if (snap.connectionState != ConnectionState.done) {
           return Padding(
             padding: EdgeInsets.symmetric(vertical: m.spacingXl),
-            child: const Center(child: CircularProgressIndicator()),
+            child: const Center(
+              child: AppLoadingIndicator(size: 44, color: TvDesignTokens.brand),
+            ),
           );
         }
         if (snap.hasError) {

@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/providers/server_providers.dart';
 import '../../../core/services/config_transfer.dart';
+import '../../../core/widgets/app_shimmer.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
@@ -97,7 +98,9 @@ class _TvConfigQrScreenState extends ConsumerState<TvConfigQrScreen> {
       );
     }
     if (_payload == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: AppLoadingIndicator(size: 48, color: TvDesignTokens.brand),
+      );
     }
     return Row(
       children: [

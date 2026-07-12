@@ -675,10 +675,19 @@ class RandomRecommendationCarousel extends ConsumerStatefulWidget {
   /// 浅色模式/壁纸场景由首页传入；深色沉浸场景传 null 走提取色。
   final Color? fadeToColor;
 
+  /// TV 端：允许遥控器方向键左右翻页、确认键进入详情。移动端不传（默认 false），
+  /// 行为完全不变；触控端仍靠滑动翻页。
+  final bool dpadFocus;
+
+  /// TV 端：首帧自动聚焦 Hero，让遥控器一进首页就落在轮播上。
+  final bool autofocus;
+
   const RandomRecommendationCarousel({
     super.key,
     this.onColorChanged,
     this.fadeToColor,
+    this.dpadFocus = false,
+    this.autofocus = false,
   });
 
   @override
@@ -869,7 +878,7 @@ class _RandomRecommendationCarouselState
         final controller = _pageController;
         if (controller == null) return const SizedBox.shrink();
 
-        return SizedBox(
+        final Widget carousel = SizedBox(
           height: carouselHeight,
           child: Stack(
             children: [
@@ -917,6 +926,46 @@ class _RandomRecommendationCarouselState
               ),
             ],
           ),
+        );
+        if (!widget.dpadFocus) return carousel;
+        // TV：把整块 Hero 变成一个可聚焦单元，方向键左右翻页、确认进详情。
+        // 边界（首页往左 / 末页往右）放行，让焦点自然移到侧边栏或下方内容。
+        return Focus(
+          autofocus: widget.autofocus,
+          onKeyEvent: (node, event) {
+            if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+              return KeyEventResult.ignored;
+            }
+            final c = _pageController;
+            if (c == null || !c.hasClients) return KeyEventResult.ignored;
+            final key = event.logicalKey;
+            if (key == LogicalKeyboardKey.arrowRight) {
+              if (_currentPage < items.length - 1) {
+                c.nextPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut);
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            }
+            if (key == LogicalKeyboardKey.arrowLeft) {
+              if (_currentPage > 0) {
+                c.previousPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut);
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            }
+            if (key == LogicalKeyboardKey.select ||
+                key == LogicalKeyboardKey.enter) {
+              final i = _currentPage.clamp(0, items.length - 1);
+              context.push(mediaRouteForItem(items[i]));
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: carousel,
         );
       },
       loading: () => SizedBox(

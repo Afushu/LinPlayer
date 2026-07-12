@@ -1,20 +1,21 @@
-import '../../../core/widgets/app_shimmer.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_interfaces.dart';
-import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../core/utils/library_filter_utils.dart';
-import '../../../ui/utils/media_helpers.dart';
-import '../../../ui/widgets/common/media_widgets.dart';
+import '../../../core/widgets/app_shimmer.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_media_card.dart';
+import '../../widgets/tv_panel.dart';
 
-/// TV 媒体库页 —— 顶部排序，下方 2:3 海报网格（真实数据）。
+/// TV 媒体库页 —— 观感对齐移动端 [LibraryDetailScreen]：顶部筛选条（随网格下滑渐隐/滚出）
+/// + 下方 2:3 海报网格（复用移动端 MediaPoster，遥控器焦点驱动）。
+///
+/// 保留原有 TV 数据/筛选/排序逻辑（[LibraryFilterValue] + 服务端过滤），仅重绘 build。
 class TvLibraryScreen extends ConsumerStatefulWidget {
   /// 由首页/查看全部传入的目标媒体库；为空时取第一个媒体库。
   final String? initialLibraryId;
@@ -29,13 +30,14 @@ class TvLibraryScreen extends ConsumerStatefulWidget {
 }
 
 class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
-  /// 海报密度档位：决定单张海报的目标宽度倍率，配合 max-extent 网格
-  /// 让列数随屏幕宽度自适应。三档对应「较密 / 中等 / 较疏」。
+  /// 海报密度档位：调节网格目标列宽，配合 max-extent 让列数随屏宽自适应。
+  /// 三档对应「较密 / 中等 / 较疏」，中等在 1920 上约 6 列（对齐移动端 3 列的加宽版）。
   static const List<double> _densityFactors = [0.85, 1.0, 1.3];
   int _densityIndex = 1;
   String? _libraryId;
-  // 筛选 + 排序（服务端过滤；排序字段/升降序也并入 _filter）
+  // 筛选 + 排序（服务端过滤；排序字段/升降序也并入 _filter）。
   late LibraryFilterValue _filter;
+  final ScrollController _scroll = ScrollController();
 
   @override
   void initState() {
@@ -50,63 +52,102 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
   }
 
   @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// 套用筛选并把排序落盘（退出播放器返回后仍生效）。
+  void _apply(LibraryFilterValue v) {
+    setState(() => _filter = v);
+    ref.read(librarySortProvider.notifier).state =
+        LibrarySortPref(sortBy: v.sortBy, descending: v.sortDescending);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final m = context.tv;
     final librariesAsync = ref.watch(librariesProvider);
 
     return Scaffold(
       backgroundColor: TvDesignTokens.background,
-      body: Padding(
-        padding: EdgeInsets.all(m.spacingXl),
-        child: librariesAsync.when(
-          data: (libs) {
-            if (libs.isEmpty) {
-              return _centerHint('暂无媒体库');
-            }
-            final libId = _libraryId ?? libs.first.id;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(m, libs, libId),
-                SizedBox(height: m.spacingMd),
-                _buildSortRow(m),
-                _buildFilterRows(m, libId),
-                SizedBox(height: m.spacingLg),
-                Expanded(child: _buildGrid(m, libId)),
-              ],
-            );
-          },
-          loading: () =>
-              const Center(child: AppLoadingIndicator(size: 48, color: TvDesignTokens.brand)),
-          error: (e, _) => _centerHint('加载媒体库失败：$e'),
-        ),
+      body: librariesAsync.when(
+        data: (libs) {
+          if (libs.isEmpty) return _centerHint('暂无媒体库');
+          final libId = _libraryId ?? libs.first.id;
+          return CustomScrollView(
+            controller: _scroll,
+            slivers: [
+              // 筛选条：随网格下滑逐渐渐隐并滚出（对齐移动端）。
+              SliverToBoxAdapter(
+                child: AnimatedBuilder(
+                  animation: _scroll,
+                  builder: (context, child) {
+                    final offset =
+                        _scroll.hasClients ? _scroll.offset : 0.0;
+                    // 前 120px 线性渐隐；面板本身也随滚动上移滑出 = 往上逐渐消失。
+                    final opacity = (1 - offset / 120).clamp(0.0, 1.0);
+                    return Opacity(opacity: opacity, child: child);
+                  },
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        m.spacingXl, m.spacingXl, m.spacingXl, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeader(m, libs, libId),
+                        SizedBox(height: m.spacingMd),
+                        _buildFilterBar(m, libId),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(child: SizedBox(height: m.spacingLg)),
+              _buildGridSliver(m, libId),
+              SliverToBoxAdapter(child: SizedBox(height: m.spacingXxl)),
+            ],
+          );
+        },
+        loading: () => const Center(
+            child: AppLoadingIndicator(size: 48, color: TvDesignTokens.brand)),
+        error: (e, _) => _centerHint('加载媒体库失败：$e'),
       ),
     );
   }
 
   Widget _buildHeader(TvMetrics m, List<Library> libs, String selectedId) {
-    final dense = _densityIndex == 0;
     // selectedId 可能是合集(不在 libs 里)，匹配不到就用传入标题兜底。
     final match = libs.where((l) => l.id == selectedId).firstOrNull;
     final title = match?.name ?? widget.initialTitle ?? libs.first.name;
     return Row(
       children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: m.fontSizeXxl,
-            color: TvDesignTokens.textPrimary,
-            fontWeight: FontWeight.bold,
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: m.fontSizeXxl,
+              color: TvDesignTokens.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
-        const Spacer(),
+        if (_filter.activeCount > 0) ...[
+          TvFocusable(
+            onSelect: () => _apply(_filter.cleared()),
+            child: _chip(m, icon: Icons.restart_alt, label: '重置', selected: false),
+          ),
+          SizedBox(width: m.spacingSm),
+        ],
         TvFocusable(
           onSelect: () => setState(() {
             _densityIndex = (_densityIndex + 1) % _densityFactors.length;
           }),
           child: _chip(
             m,
-            icon: dense ? Icons.grid_on : Icons.grid_view,
+            icon: _densityIndex == 0 ? Icons.grid_on : Icons.grid_view,
             label: _densityIndex == 0
                 ? '较密'
                 : (_densityIndex == 1 ? '中等' : '较疏'),
@@ -124,90 +165,71 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
     (label: '官方评级', key: 'OfficialRating'),
   ];
 
-  Widget _buildSortRow(TvMetrics m) {
-    return Wrap(
-      spacing: m.spacingSm,
-      runSpacing: m.spacingSm,
-      children: [
-        for (final opt in _sortOptions)
-          TvFocusable(
-            onSelect: () {
-              final v = _filter.toggledSort(opt.key);
-              setState(() => _filter = v);
-              ref.read(librarySortProvider.notifier).state =
-                  LibrarySortPref(sortBy: v.sortBy, descending: v.sortDescending);
-            },
-            child: _chip(
-              m,
-              icon: _filter.sortBy == opt.key
-                  ? (_filter.sortDescending
-                      ? Icons.arrow_downward
-                      : Icons.arrow_upward)
-                  : null,
-              label: opt.label,
-              selected: _filter.sortBy == opt.key,
-            ),
-          ),
-      ],
-    );
-  }
-
-  /// 类型/标签/时间：项不多，一行行铺开可点选胶囊（单选，再选取消）。工作室取值可能
-  /// 很多，单独成一行回显当前值，点开焦点弹窗（拼音排序）选。下方网格服务端实时过滤。
-  Widget _buildFilterRows(TvMetrics m, String libraryId) {
+  /// 筛选条：时间（平铺胶囊）+ 类型/标签/工作室（回显行，点开 TvPanel 单选）+ 排序。
+  /// 对齐移动端紧凑筛选栏：小取值平铺、大取值走弹窗。下方网格服务端实时过滤。
+  Widget _buildFilterBar(TvMetrics m, String libraryId) {
     final facetsAsync = ref.watch(filtersProvider(libraryId));
     return facetsAsync.maybeWhen(
       data: (f) {
         final years = buildYearChips(f.years, currentYear: DateTime.now().year);
         final rows = <Widget>[];
-        // 顺序（自上而下）：时间 → 类型 → 标签 → 工作室。
+        // 顺序（自上而下）：时间 → 类型 → 标签 → 工作室 → 排序。
         if (years.isNotEmpty) {
           rows.add(_facetChipRow(m, '时间', [
             for (final yc in years)
               _facetChip(m, yc.label, _filter.yearLabel == yc.label, () {
                 final on = _filter.yearLabel == yc.label;
-                _filter = _filter.withYear(
-                    on ? null : yc.label, on ? null : yc.yearsCsv);
+                _apply(_filter.withYear(
+                    on ? null : yc.label, on ? null : yc.yearsCsv));
               }),
           ]));
         }
         if (f.genres.isNotEmpty) {
-          rows.add(_facetChipRow(m, '类型', [
-            for (final g in f.genres)
-              _facetChip(m, g, _filter.genre == g,
-                  () => _filter = _filter.withGenre(_filter.genre == g ? null : g)),
-          ]));
-        }
-        if (f.tags.isNotEmpty) {
-          rows.add(_facetChipRow(m, '标签', [
-            for (final t in f.tags)
-              _facetChip(m, t, _filter.tag == t,
-                  () => _filter = _filter.withTag(_filter.tag == t ? null : t)),
-          ]));
-        }
-        if (f.studios.isNotEmpty) {
-          rows.add(_facetRow(m, '工作室', _filter.studio, () async {
-            final p = await _showFacetPicker(
-                m, '工作室', sortByPinyin(f.studios), _filter.studio);
-            if (p != null) {
-              // 工作室优先存 Id（StudioIds），服务端 GUID 严格时 API 层自动退回按名过滤。
-              final name = p.isEmpty ? null : p;
-              setState(() => _filter = _filter.withStudio(
-                  name, name == null ? null : f.studioIds[name]));
-            }
+          rows.add(_pickerRow(m, '类型', _filter.genre, () {
+            _openFacetPanel('类型', f.genres, _filter.genre,
+                (p) => _apply(_filter.withGenre(p)));
           }));
         }
-        if (rows.isEmpty) return const SizedBox.shrink();
-        return Padding(
-          padding: EdgeInsets.only(top: m.spacingMd),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows),
-        );
+        if (f.tags.isNotEmpty) {
+          rows.add(_pickerRow(m, '标签', _filter.tag, () {
+            _openFacetPanel('标签', sortByPinyin(f.tags), _filter.tag,
+                (p) => _apply(_filter.withTag(p)));
+          }));
+        }
+        if (f.studios.isNotEmpty) {
+          rows.add(_pickerRow(m, '工作室', _filter.studio, () {
+            // 工作室优先存 Id（StudioIds），服务端 GUID 严格时 API 层自动退回按名过滤。
+            _openFacetPanel('工作室', sortByPinyin(f.studios), _filter.studio,
+                (p) => _apply(_filter.withStudio(
+                    p, p == null ? null : f.studioIds[p])));
+          }));
+        }
+        rows.add(_facetChipRow(m, '排序', [for (final o in _sortOptions) _sortChip(m, o)]));
+        return Column(
+            crossAxisAlignment: CrossAxisAlignment.start, children: rows);
       },
       orElse: () => const SizedBox.shrink(),
     );
   }
 
-  /// 一行可点选胶囊（类型/标签/时间）。
+  Widget _sortChip(TvMetrics m, ({String label, String key}) opt) {
+    final selected = _filter.sortBy == opt.key;
+    return TvFocusable(
+      onSelect: () => _apply(_filter.toggledSort(opt.key)),
+      child: _chip(
+        m,
+        icon: selected
+            ? (_filter.sortDescending
+                ? Icons.arrow_downward
+                : Icons.arrow_upward)
+            : null,
+        label: opt.label,
+        selected: selected,
+      ),
+    );
+  }
+
+  /// 一行平铺可点选胶囊（时间 / 排序）。
   Widget _facetChipRow(TvMetrics m, String label, List<Widget> chips) {
     return Padding(
       padding: EdgeInsets.only(bottom: m.spacingSm),
@@ -216,17 +238,7 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
         children: [
           Padding(
             padding: EdgeInsets.only(top: m.spacingXs, right: m.spacingMd),
-            child: SizedBox(
-              width: m.s(64),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: m.fontSizeSm,
-                  color: TvDesignTokens.textSecondary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            child: SizedBox(width: m.s(64), child: _dimLabel(m, label)),
           ),
           Expanded(
             child: Wrap(
@@ -240,32 +252,22 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
   Widget _facetChip(
       TvMetrics m, String label, bool selected, VoidCallback apply) {
     return TvFocusable(
-      onSelect: () => setState(apply),
+      onSelect: apply,
       child: _chip(m, label: label, selected: selected),
     );
   }
 
-  /// 工作室一行：回显当前选中值（未选「全部」），点开焦点弹窗。
-  Widget _facetRow(
-      TvMetrics m, String label, String? selected, VoidCallback onTap) {
+  /// 回显当前选中值（未选「全部」），点开 TvPanel 单选（工作室/类型/标签）。
+  Widget _pickerRow(
+      TvMetrics m, String label, String? selected, VoidCallback onOpen) {
     return Padding(
       padding: EdgeInsets.only(bottom: m.spacingSm),
       child: Row(
         children: [
-          SizedBox(
-            width: m.s(76),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: m.fontSizeSm,
-                color: TvDesignTokens.textSecondary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
+          SizedBox(width: m.s(76), child: _dimLabel(m, label)),
           SizedBox(width: m.spacingMd),
           TvFocusable(
-            onSelect: onTap,
+            onSelect: onOpen,
             child: _chip(m,
                 icon: Icons.keyboard_arrow_down,
                 label: selected ?? '全部',
@@ -276,67 +278,47 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
     );
   }
 
-  /// TV 焦点式单选弹窗：拼音排序取值 + 顶部「全部」。返回 null=未改、''=全部、其余=值。
-  /// 当前值（或「全部」）autofocus，D-pad 在 Wrap 内移动、框架自动 ensureVisible 跟随滚动。
-  Future<String?> _showFacetPicker(
-      TvMetrics m, String title, List<String> options, String? current) {
-    return showDialog<String>(
+  Widget _dimLabel(TvMetrics m, String label) => Text(
+        label,
+        style: TextStyle(
+          fontSize: m.fontSizeSm,
+          color: TvDesignTokens.textSecondary,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+
+  /// TV 右侧滑入面板单选：顶部「全部」+ 拼音排序取值。选中回调 [onPick]（null=全部/清除）。
+  void _openFacetPanel(String title, List<String> options, String? current,
+      void Function(String? picked) onPick) {
+    showDialog<void>(
       context: context,
-      builder: (ctx) {
-        return Dialog(
-          backgroundColor: TvDesignTokens.surfaceElevated,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(m.posterRadius)),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: m.s(560),
-              maxHeight: MediaQuery.of(ctx).size.height * 0.8,
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(m.spacingLg),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                        fontSize: m.fontSizeLg,
-                        color: TvDesignTokens.textPrimary,
-                        fontWeight: FontWeight.bold,
-                      )),
-                  SizedBox(height: m.spacingMd),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: Wrap(
-                        spacing: m.spacingSm,
-                        runSpacing: m.spacingSm,
-                        children: [
-                          TvFocusable(
-                            autofocus: current == null,
-                            onSelect: () => Navigator.pop(ctx, ''),
-                            child:
-                                _chip(m, label: '全部', selected: current == null),
-                          ),
-                          for (final o in options)
-                            TvFocusable(
-                              autofocus: o == current,
-                              onSelect: () => Navigator.pop(ctx, o),
-                              child: _chip(m, label: o, selected: o == current),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      builder: (ctx) => TvPanel(
+        title: title,
+        onClose: () => Navigator.pop(ctx),
+        children: [
+          TvPanelOption(
+            title: '全部',
+            isSelected: current == null,
+            onTap: () {
+              Navigator.pop(ctx);
+              onPick(null);
+            },
           ),
-        );
-      },
+          for (final o in options)
+            TvPanelOption(
+              title: o,
+              isSelected: o == current,
+              onTap: () {
+                Navigator.pop(ctx);
+                onPick(o);
+              },
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _buildGrid(TvMetrics m, String libraryId) {
+  Widget _buildGridSliver(TvMetrics m, String libraryId) {
     final itemsAsync = ref.watch(libraryItemsProvider((
       libraryId: libraryId,
       sortBy: _filter.sortBy,
@@ -349,72 +331,46 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
       ratingMin: _filter.ratingMin,
       ratingMax: _filter.ratingMax,
     )));
-    final api = ref.read(apiClientProvider);
 
-    // 2:3 海报 + 下方标题；列数随屏幕宽度自适应，密度档位微调目标宽度。
+    // 2:3 海报 + 标题；列数随屏宽自适应，密度档位微调目标列宽（中等档 1920 上约 6 列）。
     final double maxExtent =
-        m.posterWidth2_3 * _densityFactors[_densityIndex];
+        m.posterWidth2_3 * 1.4 * _densityFactors[_densityIndex];
+
     return itemsAsync.when(
       data: (items) {
-        if (items.isEmpty) return _centerHint('该媒体库暂无内容');
-        return GridView.builder(
-          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: maxExtent,
-            childAspectRatio: 2 / 3.4,
-            crossAxisSpacing: m.posterSpacing,
-            mainAxisSpacing: m.posterSpacing,
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            final urls = resolveMediaItemImageUrls(api, item, maxWidth: 360);
-            return TvFocusable(
-              padding: EdgeInsets.all(m.s(6)),
-              onSelect: () => context.push('/tv/detail/${item.id}'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(m.posterRadius),
-                      child: urls.isNotEmpty
-                          ? MediaImage(
-                              imageUrl: urls.first,
-                              imageUrls: urls.length > 1 ? urls.sublist(1) : null,
-                              width: double.infinity,
-                              height: double.infinity,
-                              fit: BoxFit.cover,
-                            )
-                          : ColoredBox(
-                              color: TvDesignTokens.surfaceElevated,
-                              child: Icon(Icons.movie_outlined,
-                                  color: TvDesignTokens.textDisabled,
-                                  size: m.s(40)),
-                            ),
-                    ),
-                  ),
-                  SizedBox(height: m.spacingXs),
-                  Text(
-                    item.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: m.fontSizeXs,
-                      color: TvDesignTokens.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ).animate().fadeIn(
-                  delay: Duration(milliseconds: 12 * (index % 6)),
-                  duration: TvDesignTokens.contentFadeDuration,
+        if (items.isEmpty) {
+          return SliverToBoxAdapter(child: _centerHint('该媒体库暂无内容'));
+        }
+        return SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: m.spacingXl),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: maxExtent,
+              childAspectRatio: 0.58, // 海报(2:3) + 标题/年份/评分
+              crossAxisSpacing: m.posterSpacing,
+              mainAxisSpacing: m.posterSpacing,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final item = items[index];
+                return TvMediaCard(
+                  item: item,
+                  width: double.infinity,
+                  height: double.infinity,
+                  onSelect: () => context.push('/tv/detail/${item.id}'),
                 );
-          },
+              },
+              childCount: items.length,
+            ),
+          ),
         );
       },
-      loading: () =>
-          const Center(child: AppLoadingIndicator(size: 48, color: TvDesignTokens.brand)),
-      error: (e, _) => _centerHint('加载失败：$e'),
+      loading: () => const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+            child: AppLoadingIndicator(size: 48, color: TvDesignTokens.brand)),
+      ),
+      error: (e, _) => SliverToBoxAdapter(child: _centerHint('加载失败：$e')),
     );
   }
 
@@ -460,11 +416,14 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
   Widget _centerHint(String text) {
     final m = context.tv;
     return Center(
-      child: Text(
-        text,
-        style: TextStyle(
-          color: TvDesignTokens.textSecondary,
-          fontSize: m.fontSizeMd,
+      child: Padding(
+        padding: EdgeInsets.all(m.spacingXxl),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: TvDesignTokens.textSecondary,
+            fontSize: m.fontSizeMd,
+          ),
         ),
       ),
     );

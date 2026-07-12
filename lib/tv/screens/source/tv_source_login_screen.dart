@@ -14,7 +14,10 @@ import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_button.dart';
 import '../../widgets/tv_focusable.dart';
 
-/// TV 端网盘/聚合源登录页（账密型，OpenList/Ani-rss）。聚焦输入框唤起 leanback IME。
+/// TV 端网盘/聚合源登录页（账密型 OpenList/Ani-rss/飞牛 + 夸克扫码/Cookie）。
+///
+/// 观感对齐移动端 [SourceLoginScreen]：accent 图标头部 + 带前缀图标的输入行 +
+/// 夸克分段切换 + 二维码；聚焦输入框唤起 leanback IME，交互焦点驱动。
 class TvSourceLoginScreen extends ConsumerStatefulWidget {
   final SourceKind kind;
 
@@ -132,27 +135,50 @@ class _TvSourceLoginScreenState extends ConsumerState<TvSourceLoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '添加 ${d.name}',
-                  style: TextStyle(
-                    fontSize: m.fontSizeXxl,
-                    color: TvDesignTokens.textPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: m.spacingSm),
-                Text(
-                  d.subtitle,
-                  style: TextStyle(
-                    fontSize: m.fontSizeSm,
-                    color: TvDesignTokens.textSecondary,
-                  ),
+                // accent 图标头部（对齐移动端）。
+                Row(
+                  children: [
+                    Container(
+                      width: m.s(56),
+                      height: m.s(56),
+                      decoration: BoxDecoration(
+                        color: d.accent.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(m.posterRadius),
+                      ),
+                      child: Icon(d.icon, color: d.accent, size: m.s(30)),
+                    ),
+                    SizedBox(width: m.spacingLg),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '添加 ${d.name}',
+                            style: TextStyle(
+                              fontSize: m.fontSizeXxl,
+                              color: TvDesignTokens.textPrimary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: m.spacingXs),
+                          Text(
+                            d.subtitle,
+                            style: TextStyle(
+                              fontSize: m.fontSizeSm,
+                              color: TvDesignTokens.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 SizedBox(height: m.spacingXl),
                 _field(
                   m: m,
                   label: '备注名称（可选）',
                   controller: _nameController,
+                  prefixIcon: Icons.label_outline,
                 ),
                 SizedBox(height: m.spacingLg),
                 if (_isQuark) ...[
@@ -173,6 +199,7 @@ class _TvSourceLoginScreenState extends ConsumerState<TvSourceLoginScreen> {
                       hint: '__pus=...; __puus=...; ...',
                       autofocus: true,
                       maxLines: 4,
+                      prefixIcon: Icons.cookie_outlined,
                     ),
                 ] else ...[
                   _field(
@@ -182,15 +209,22 @@ class _TvSourceLoginScreenState extends ConsumerState<TvSourceLoginScreen> {
                     hint: 'https://example.com:5244',
                     autofocus: true,
                     keyboardType: TextInputType.url,
+                    prefixIcon: Icons.link,
                   ),
                   SizedBox(height: m.spacingLg),
-                  _field(m: m, label: '用户名', controller: _userController),
+                  _field(
+                    m: m,
+                    label: '用户名',
+                    controller: _userController,
+                    prefixIcon: Icons.person_outline,
+                  ),
                   SizedBox(height: m.spacingLg),
                   _field(
                     m: m,
                     label: '密码',
                     controller: _passController,
                     obscure: true,
+                    prefixIcon: Icons.lock_outline,
                   ),
                 ],
                 if (_error != null) ...[
@@ -227,26 +261,10 @@ class _TvSourceLoginScreenState extends ConsumerState<TvSourceLoginScreen> {
                       ),
                       SizedBox(width: m.spacingMd),
                     ],
-                    TvFocusable(
-                      padding: EdgeInsets.all(m.s(4)),
-                      onSelect: () => Navigator.of(context).maybePop(),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: m.spacingLg,
-                          vertical: m.spacingMd,
-                        ),
-                        decoration: BoxDecoration(
-                          color: TvDesignTokens.surface,
-                          borderRadius: BorderRadius.circular(m.posterRadius),
-                        ),
-                        child: Text(
-                          '取消',
-                          style: TextStyle(
-                            fontSize: m.fontSizeMd,
-                            color: TvDesignTokens.textPrimary,
-                          ),
-                        ),
-                      ),
+                    TvButton(
+                      text: '取消',
+                      outlined: true,
+                      onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ],
                 ),
@@ -314,6 +332,7 @@ class _TvSourceLoginScreenState extends ConsumerState<TvSourceLoginScreen> {
     required String label,
     required TextEditingController controller,
     String? hint,
+    IconData? prefixIcon,
     bool obscure = false,
     bool autofocus = false,
     TextInputType? keyboardType,
@@ -346,27 +365,42 @@ class _TvSourceLoginScreenState extends ConsumerState<TvSourceLoginScreen> {
                   ),
                 ),
                 padding: EdgeInsets.symmetric(horizontal: m.spacingMd),
-                child: TextField(
-                  controller: controller,
-                  autofocus: autofocus,
-                  obscureText: obscure,
-                  keyboardType: keyboardType,
-                  maxLines: obscure ? 1 : maxLines,
-                  style: TextStyle(
-                    fontSize: m.fontSizeMd,
-                    color: TvDesignTokens.textPrimary,
-                  ),
-                  cursorColor: TvDesignTokens.brand,
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: hint,
-                    hintStyle: TextStyle(
-                      color: TvDesignTokens.textDisabled,
-                      fontSize: m.fontSizeSm,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (prefixIcon != null) ...[
+                      Icon(prefixIcon,
+                          color: focused
+                              ? TvDesignTokens.brand
+                              : TvDesignTokens.textSecondary,
+                          size: m.s(26)),
+                      SizedBox(width: m.spacingSm),
+                    ],
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        autofocus: autofocus,
+                        obscureText: obscure,
+                        keyboardType: keyboardType,
+                        maxLines: obscure ? 1 : maxLines,
+                        style: TextStyle(
+                          fontSize: m.fontSizeMd,
+                          color: TvDesignTokens.textPrimary,
+                        ),
+                        cursorColor: TvDesignTokens.brand,
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          hintText: hint,
+                          hintStyle: TextStyle(
+                            color: TvDesignTokens.textDisabled,
+                            fontSize: m.fontSizeSm,
+                          ),
+                          contentPadding:
+                              EdgeInsets.symmetric(vertical: m.spacingMd),
+                        ),
+                      ),
                     ),
-                    contentPadding:
-                        EdgeInsets.symmetric(vertical: m.spacingMd),
-                  ),
+                  ],
                 ),
               );
             },

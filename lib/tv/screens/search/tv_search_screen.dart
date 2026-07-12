@@ -1,4 +1,3 @@
-import '../../../core/widgets/app_shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,18 +7,20 @@ import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../core/providers/server_providers.dart';
+import '../../../core/widgets/app_shimmer.dart';
 import '../../../ui/utils/media_helpers.dart';
-import '../../../ui/widgets/common/media_widgets.dart';
+import '../../../ui/widgets/common/server_group_header.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_media_card.dart';
 import '../../widgets/tv_poster_card.dart';
 
 /// TV / Pad 搜索页
 ///
-/// 结构（自上而下）：搜索栏 → 搜索历史 → 搜索结果。
-/// 直接使用系统输入法（支持中文与语音输入），不再内置软键盘——
-/// TV 与平板均自带系统键盘，自绘键盘既无法输入中文又难以点击。
+/// 观感对齐移动端 [SearchScreen]：搜索栏 → 历史标签 → 结果（普通=海报网格；
+/// 聚合=每服务器一组 [ServerGroupHeader] + 横向海报行），交互换成焦点驱动。
+/// 直接使用系统输入法（支持中文与语音输入），不再内置软键盘。
 class TvSearchScreen extends ConsumerStatefulWidget {
   const TvSearchScreen({super.key});
 
@@ -74,9 +75,14 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
                 ),
               ),
               SizedBox(height: m.spacingLg),
-              _buildSearchField(m),
-              SizedBox(height: m.spacingMd),
-              _buildAggregateToggle(m),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: _buildSearchField(m)),
+                  SizedBox(width: m.spacingMd),
+                  _buildAggregateToggle(m),
+                ],
+              ),
               SizedBox(height: m.spacingLg),
               Expanded(
                 child: _hasSearched
@@ -93,46 +99,43 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
   /// 聚合搜索开关：开启后跨所有已登录服务器并行搜索并合并结果。
   Widget _buildAggregateToggle(TvMetrics m) {
     final isAggregate = ref.watch(aggregateSearchProvider);
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: TvFocusable(
-        padding: const EdgeInsets.all(4),
-        onSelect: () => ref.read(aggregateSearchProvider.notifier).state =
-            !isAggregate,
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: m.spacingMd,
-            vertical: m.spacingSm,
+    return TvFocusable(
+      padding: const EdgeInsets.all(4),
+      onSelect: () =>
+          ref.read(aggregateSearchProvider.notifier).state = !isAggregate,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: m.spacingMd,
+          vertical: m.spacingSm,
+        ),
+        decoration: BoxDecoration(
+          color: TvDesignTokens.surface,
+          borderRadius: BorderRadius.circular(m.posterRadius),
+          border: Border.all(
+            color: isAggregate
+                ? TvDesignTokens.brand
+                : TvDesignTokens.textDisabled,
           ),
-          decoration: BoxDecoration(
-            color: TvDesignTokens.surface,
-            borderRadius: BorderRadius.circular(m.posterRadius),
-            border: Border.all(
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isAggregate ? Icons.check_box : Icons.check_box_outline_blank,
               color: isAggregate
                   ? TvDesignTokens.brand
-                  : TvDesignTokens.textDisabled,
+                  : TvDesignTokens.textSecondary,
+              size: m.s(24),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isAggregate ? Icons.check_box : Icons.check_box_outline_blank,
-                color: isAggregate
-                    ? TvDesignTokens.brand
-                    : TvDesignTokens.textSecondary,
-                size: m.s(24),
+            SizedBox(width: m.spacingSm),
+            Text(
+              '聚合搜索',
+              style: TextStyle(
+                fontSize: m.fontSizeMd,
+                color: TvDesignTokens.textPrimary,
               ),
-              SizedBox(width: m.spacingSm),
-              Text(
-                '聚合搜索（所有服务器）',
-                style: TextStyle(
-                  fontSize: m.fontSizeMd,
-                  color: TvDesignTokens.textPrimary,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -175,12 +178,20 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
     final history = ref.watch(searchHistoryProvider);
     if (history.isEmpty) {
       return Center(
-        child: Text(
-          '暂无搜索历史',
-          style: TextStyle(
-            fontSize: m.fontSizeMd,
-            color: TvDesignTokens.textDisabled,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search,
+                size: m.s(64), color: TvDesignTokens.textDisabled),
+            SizedBox(height: m.spacingMd),
+            Text(
+              '输入关键词开始搜索',
+              style: TextStyle(
+                fontSize: m.fontSizeMd,
+                color: TvDesignTokens.textDisabled,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -222,6 +233,9 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
                   _searchController.text = query;
                   _submit(query);
                 },
+                // 菜单键 / 长按删除单条历史（对齐移动端 InputChip 的删除）。
+                onLongPress: () =>
+                    ref.read(searchHistoryProvider.notifier).removeQuery(query),
                 child: Container(
                   padding: EdgeInsets.symmetric(
                     horizontal: m.spacingMd,
@@ -272,7 +286,8 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
             ),
           );
         }
-        return ListView(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               '“$query” 的搜索结果（${items.length}）',
@@ -282,12 +297,29 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: m.spacingLg),
-            for (final entry in items.asMap().entries)
-              _buildResultRow(m, entry.value).animate().fadeIn(
-                    delay: Duration(milliseconds: 30 * entry.key),
-                    duration: TvDesignTokens.contentFadeDuration,
-                  ),
+            SizedBox(height: m.spacingMd),
+            Expanded(
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: m.posterWidth2_3,
+                  childAspectRatio: 2 / 3.4,
+                  crossAxisSpacing: m.posterSpacing,
+                  mainAxisSpacing: m.posterSpacing,
+                ),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return TvMediaCard(
+                    item: item,
+                    autofocus: index == 0,
+                    onSelect: () => _openResult(item),
+                  ).animate().fadeIn(
+                        delay: Duration(milliseconds: 20 * (index % 8)),
+                        duration: TvDesignTokens.contentFadeDuration,
+                      );
+                },
+              ),
+            ),
           ],
         );
       },
@@ -306,8 +338,8 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
     );
   }
 
-  /// 聚合搜索：每台服务器一行（组头=服务器图标+名），下面封面横向排列，
-  /// 遥控器左右切换浏览、上下跨行。
+  /// 聚合搜索：每台服务器一组（[ServerGroupHeader]），下面封面横向排列，
+  /// 遥控器左右切换浏览、上下跨行。跨服务器结果的封面必须用来源服务器解析。
   Widget _buildAggregateResults(TvMetrics m) {
     final aggregateAsync = ref.watch(aggregateSearchResultsProvider);
     return aggregateAsync.when(
@@ -328,10 +360,12 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
                     color: TvDesignTokens.textDisabled)),
           );
         }
+        final servers = aggregateData.keys.toList(growable: false);
         return ListView(
           children: [
-            for (final serverName in aggregateData.keys)
-              _buildAggregateRow(m, serverName, aggregateData[serverName]!),
+            for (var s = 0; s < servers.length; s++)
+              _buildAggregateRow(
+                  m, servers[s], aggregateData[servers[s]]!, s == 0),
           ],
         );
       },
@@ -339,54 +373,25 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
   }
 
   Widget _buildAggregateRow(
-      TvMetrics m, String serverName, List<MediaItem> items) {
-    String? iconUrl;
-    for (final s in ref.watch(serverListProvider)) {
-      if (s.id == items.first.sourceServerId) {
-        iconUrl = s.iconUrl;
-        break;
-      }
-    }
+      TvMetrics m, String serverName, List<MediaItem> items, bool first) {
     return Padding(
       padding: EdgeInsets.only(bottom: m.spacingLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(m.s(6)),
-                child: SizedBox(
-                  width: m.s(32),
-                  height: m.s(32),
-                  child: iconUrl != null
-                      ? MediaImage(
-                          imageUrl: iconUrl,
-                          width: m.s(32),
-                          height: m.s(32),
-                          fit: BoxFit.contain,
-                          useDefaultUserAgent: true,
-                          errorWidget: const EmbyDefaultIcon(),
-                        )
-                      : const EmbyDefaultIcon(),
-                ),
-              ),
-              SizedBox(width: m.spacingSm),
-              Text(serverName,
-                  style: TextStyle(
-                      fontSize: m.fontSizeLg,
-                      color: TvDesignTokens.textPrimary,
-                      fontWeight: FontWeight.bold)),
-            ],
+          ServerGroupHeader(
+            serverId: items.first.sourceServerId,
+            serverName: serverName,
+            iconSize: m.s(32),
           ),
           SizedBox(height: m.spacingMd),
           SizedBox(
-            height: m.s(260),
-            child: ListView.separated(
+            height: m.posterHeight2_3 + m.s(56),
+            child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
-              separatorBuilder: (_, __) => SizedBox(width: m.spacingMd),
-              itemBuilder: (_, i) => _buildAggregatePoster(m, items[i]),
+              itemBuilder: (_, i) =>
+                  _buildAggregatePoster(m, items[i], first && i == 0),
             ),
           ),
         ],
@@ -394,79 +399,20 @@ class _TvSearchScreenState extends ConsumerState<TvSearchScreen> {
     );
   }
 
-  Widget _buildAggregatePoster(TvMetrics m, MediaItem item) {
+  Widget _buildAggregatePoster(TvMetrics m, MediaItem item, bool autofocus) {
+    // 跨服务器：用来源服务器解析封面（不能走默认 apiClientProvider / MediaPoster）。
     final api = apiClientForItem(ref, item);
     final urls = resolveMediaItemImageUrls(api, item, maxWidth: 320);
     return TvFocusable(
-      padding: const EdgeInsets.all(4),
+      autofocus: autofocus,
+      padding: EdgeInsets.all(m.spacingSm),
       onSelect: () => _openResult(item),
       child: TvPosterCard(
         imageUrl: urls.isNotEmpty ? urls.first : null,
         title: item.name,
         subtitle: _resultSubtitle(item),
-        width: m.s(130),
-        height: m.s(195),
-      ),
-    );
-  }
-
-  Widget _buildResultRow(TvMetrics m, MediaItem item) {
-    // 聚合搜索结果可能来自其它服务器：用来源服务器解析封面、点击时先切服务器。
-    final api = apiClientForItem(ref, item);
-    final urls = resolveMediaItemLandscapeImageUrls(api, item, maxWidth: 360);
-    return Padding(
-      padding: EdgeInsets.only(bottom: m.spacingSm),
-      child: TvFocusable(
-        padding: const EdgeInsets.all(4),
-        onSelect: () => _openResult(item),
-        child: Container(
-          padding: EdgeInsets.all(m.spacingMd),
-          decoration: BoxDecoration(
-            color: TvDesignTokens.surface,
-            borderRadius: BorderRadius.circular(m.posterRadius),
-          ),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(m.posterRadius),
-                child: SizedBox(
-                  width: m.s(124),
-                  height: m.s(70),
-                  child: urls.isNotEmpty
-                      ? MediaImage(
-                          imageUrl: urls.first,
-                          width: m.s(124),
-                          height: m.s(70),
-                          fit: BoxFit.cover,
-                        )
-                      : const ColoredBox(
-                          color: TvDesignTokens.surfaceElevated,
-                          child: Icon(Icons.movie_outlined,
-                              color: TvDesignTokens.textDisabled)),
-                ),
-              ),
-              SizedBox(width: m.spacingMd),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: m.fontSizeMd,
-                            color: TvDesignTokens.textPrimary)),
-                    SizedBox(height: m.spacingXs),
-                    Text(_resultSubtitle(item),
-                        style: TextStyle(
-                            fontSize: m.fontSizeSm,
-                            color: TvDesignTokens.textSecondary)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+        width: m.posterWidth2_3,
+        height: m.posterHeight2_3,
       ),
     );
   }

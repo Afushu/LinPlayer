@@ -184,6 +184,30 @@ final useVideoBackgroundProvider =
   );
 });
 
+/// TV 播放页「选集」底栏卡片是否用缩略图（true）还是纯集数卡（false）。默认缩略图。
+final tvEpisodeCardThumbnailProvider =
+    StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
+  return PreferenceNotifier<bool>(
+    defaultValue: true,
+    readValue: (prefs) => prefs.getBool('linplayer_tv_episode_card_thumbnail'),
+    writeValue: (prefs, value) async {
+      await prefs.setBool('linplayer_tv_episode_card_thumbnail', value);
+    },
+  );
+});
+
+/// TV 播放页是否常驻底部进度条（控制栏隐藏时也显示一条加粗进度条）。默认关。
+final tvPinnedProgressBarProvider =
+    StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
+  return PreferenceNotifier<bool>(
+    defaultValue: false,
+    readValue: (prefs) => prefs.getBool('linplayer_tv_pinned_progress'),
+    writeValue: (prefs, value) async {
+      await prefs.setBool('linplayer_tv_pinned_progress', value);
+    },
+  );
+});
+
 /// 自定义壁纸图片路径（空 = 不使用壁纸，走主题背景色）。
 /// 仅支持静态图片；用户裁剪后的图写入 App 支持目录，这里只存路径。
 final customWallpaperPathProvider =

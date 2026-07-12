@@ -7,13 +7,15 @@ import '../../../core/providers/sync_providers.dart';
 import '../../../core/services/afdian_service.dart';
 import '../../../core/services/sync/calendar_models.dart';
 import '../../../core/services/sync/sync_models.dart';
+import '../../../ui/widgets/common/media_widgets.dart';
 import '../../../ui/widgets/common/ranking_entry_panel.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
 import '../../widgets/tv_panel.dart';
 
-/// TV 端追剧日历（付费解锁）。数据来源在 Trakt / Bangumi 间切换。
+/// TV 端追剧日历（付费解锁，观感对齐移动端）。顶部 Trakt/Bangumi 分段 + 只看我追的/
+/// 刷新动作，下方按日分组的条目卡片。数据/门控逻辑保持不变，仅重绘 build。
 class TvCalendarScreen extends ConsumerStatefulWidget {
   const TvCalendarScreen({super.key});
 
@@ -44,48 +46,48 @@ class _TvCalendarScreenState extends ConsumerState<TvCalendarScreen> {
     return Scaffold(
       backgroundColor: TvDesignTokens.background,
       body: Padding(
-        padding: EdgeInsets.all(m.spacingXl),
+        padding: EdgeInsets.fromLTRB(m.spacingXl, m.spacingXl, m.spacingXl, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('追剧日历',
-                style: TextStyle(
-                  fontSize: m.fontSizeXxl,
-                  color: TvDesignTokens.textPrimary,
-                  fontWeight: FontWeight.bold,
-                )),
-            SizedBox(height: m.spacingLg),
-            Row(children: [
-              _sourceChip(m, SyncService.trakt, 'Trakt'),
-              SizedBox(width: m.spacingMd),
-              _sourceChip(m, SyncService.bangumi, 'Bangumi'),
-              const Spacer(),
-              TvFocusable(
-                onSelect: () => setState(() => _onlyMine = !_onlyMine),
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: m.spacingLg, vertical: m.spacingMd),
-                  decoration: BoxDecoration(
-                    color: TvDesignTokens.surface,
-                    borderRadius: BorderRadius.circular(m.posterRadius),
-                  ),
-                  child: Text(_onlyMine ? '只看我追的' : '整季全部',
-                      style: TextStyle(
-                        fontSize: m.fontSizeMd,
-                        color: TvDesignTokens.textPrimary,
-                      )),
+            Row(
+              children: [
+                Text('追剧日历',
+                    style: TextStyle(
+                      fontSize: m.fontSizeXxl,
+                      color: TvDesignTokens.textPrimary,
+                      fontWeight: FontWeight.bold,
+                    )),
+                const Spacer(),
+                _actionChip(
+                  m,
+                  _onlyMine ? Icons.person : Icons.public,
+                  _onlyMine ? '只看我追的' : '整季全部',
+                  onSelect: () => setState(() => _onlyMine = !_onlyMine),
                 ),
-              ),
-            ]),
+                SizedBox(width: m.spacingMd),
+                _actionChip(
+                  m,
+                  Icons.refresh,
+                  '刷新',
+                  onSelect: () => ref.invalidate(calendarEntriesProvider(
+                      (source: _source, onlyMine: _onlyMine))),
+                ),
+              ],
+            ),
+            SizedBox(height: m.spacingLg),
+            Row(
+              children: [
+                _sourceChip(m, SyncService.trakt, 'Trakt',
+                    Icons.movie_outlined, autofocus: true),
+                SizedBox(width: m.spacingMd),
+                _sourceChip(m, SyncService.bangumi, 'Bangumi',
+                    Icons.animation_outlined),
+              ],
+            ),
             SizedBox(height: m.spacingLg),
             Expanded(
-              child: connected
-                  ? _list(m)
-                  : Center(
-                      child: Text('未连接 ${_source.displayName}，请先到「设置 → 同步」连接',
-                          style: const TextStyle(
-                              color: TvDesignTokens.textSecondary)),
-                    ),
+              child: connected ? _list(m) : _notConnected(m),
             ),
           ],
         ),
@@ -93,22 +95,84 @@ class _TvCalendarScreenState extends ConsumerState<TvCalendarScreen> {
     );
   }
 
-  Widget _sourceChip(TvMetrics m, SyncService s, String label) {
+  Widget _sourceChip(TvMetrics m, SyncService s, String label, IconData icon,
+      {bool autofocus = false}) {
     final active = s == _source;
     return TvFocusable(
+      autofocus: autofocus,
       onSelect: () => _select(s),
+      padding: EdgeInsets.all(m.spacingXs),
       child: Container(
-        padding:
-            EdgeInsets.symmetric(horizontal: m.spacingLg, vertical: m.spacingMd),
+        padding: EdgeInsets.symmetric(
+            horizontal: m.spacingLg, vertical: m.spacingSm),
         decoration: BoxDecoration(
           color: active ? TvDesignTokens.brand : TvDesignTokens.surface,
-          borderRadius: BorderRadius.circular(m.posterRadius),
+          borderRadius: BorderRadius.circular(m.s(22)),
         ),
-        child: Text(label,
-            style: TextStyle(
-              fontSize: m.fontSizeMd,
-              color: active ? Colors.white : TvDesignTokens.textPrimary,
-            )),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: m.s(20),
+                color: active ? Colors.white : TvDesignTokens.textSecondary),
+            SizedBox(width: m.spacingSm),
+            Text(label,
+                style: TextStyle(
+                  fontSize: m.fontSizeMd,
+                  color: active ? Colors.white : TvDesignTokens.textPrimary,
+                  fontWeight: FontWeight.w600,
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _actionChip(TvMetrics m, IconData icon, String label,
+      {required VoidCallback onSelect}) {
+    return TvFocusable(
+      onSelect: onSelect,
+      padding: EdgeInsets.all(m.spacingXs),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+            horizontal: m.spacingLg, vertical: m.spacingSm),
+        decoration: BoxDecoration(
+          color: TvDesignTokens.surface,
+          borderRadius: BorderRadius.circular(m.s(22)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: m.s(20), color: TvDesignTokens.textSecondary),
+            SizedBox(width: m.spacingSm),
+            Text(label,
+                style: TextStyle(
+                  fontSize: m.fontSizeMd,
+                  color: TvDesignTokens.textPrimary,
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _notConnected(TvMetrics m) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.link_off,
+              size: m.s(56), color: TvDesignTokens.textSecondary),
+          SizedBox(height: m.spacingMd),
+          Text('未连接 ${_source.displayName}',
+              style: TextStyle(
+                  fontSize: m.fontSizeMd, color: TvDesignTokens.textPrimary)),
+          SizedBox(height: m.spacingXs),
+          Text('请先到「设置 → 同步」连接账号',
+              style: TextStyle(
+                  fontSize: m.fontSizeSm,
+                  color: TvDesignTokens.textSecondary)),
+        ],
       ),
     );
   }
@@ -123,13 +187,20 @@ class _TvCalendarScreenState extends ConsumerState<TvCalendarScreen> {
               style: const TextStyle(color: TvDesignTokens.textSecondary))),
       data: (entries) {
         if (entries.isEmpty) {
-          return const Center(
-            child: Text('暂无放送数据（Bangumi 仅显示在看中当季正在放送的番）',
-                style: TextStyle(color: TvDesignTokens.textSecondary)),
+          return Center(
+            child: Padding(
+              padding: EdgeInsets.all(m.spacingLg),
+              child: const Text(
+                '暂无放送数据（Bangumi 仅显示在看中当季正在放送的番）',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: TvDesignTokens.textSecondary),
+              ),
+            ),
           );
         }
         final sections = groupCalendarEntries(entries);
         return ListView.builder(
+          padding: EdgeInsets.only(bottom: m.spacingXl),
           itemCount: sections.length,
           itemBuilder: (context, i) {
             final sec = sections[i];
@@ -138,15 +209,34 @@ class _TvCalendarScreenState extends ConsumerState<TvCalendarScreen> {
               children: [
                 Padding(
                   padding: EdgeInsets.symmetric(vertical: m.spacingMd),
-                  child: Text(
-                    sec.isToday ? '${sec.header}（今天）' : sec.header,
-                    style: TextStyle(
-                      fontSize: m.fontSizeLg,
-                      color: sec.isToday
-                          ? TvDesignTokens.brand
-                          : TvDesignTokens.textPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Row(
+                    children: [
+                      Text(
+                        sec.header,
+                        style: TextStyle(
+                          fontSize: m.fontSizeLg,
+                          color: sec.isToday
+                              ? TvDesignTokens.brand
+                              : TvDesignTokens.textPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (sec.isToday) ...[
+                        SizedBox(width: m.spacingSm),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: m.spacingSm, vertical: m.spacingXs / 2),
+                          decoration: BoxDecoration(
+                            color: TvDesignTokens.brand.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(m.s(6)),
+                          ),
+                          child: Text('今天',
+                              style: TextStyle(
+                                  fontSize: m.fontSizeXs,
+                                  color: TvDesignTokens.brand)),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 ...sec.items.map((e) => _entry(m, e)),
@@ -159,53 +249,72 @@ class _TvCalendarScreenState extends ConsumerState<TvCalendarScreen> {
   }
 
   Widget _entry(TvMetrics m, CalendarEntry e) {
+    final img = e.imageUrl;
+    final time = e.airDate != null
+        ? '${e.airDate!.hour.toString().padLeft(2, '0')}:'
+            '${e.airDate!.minute.toString().padLeft(2, '0')}'
+        : null;
     return TvFocusable(
       onSelect: () => showCrossServerLookup(
         context,
         title: e.title,
-        imageUrl: e.imageUrl,
+        imageUrl: img,
         subtitle: e.subtitle,
         dialog: true,
       ),
+      padding:
+          EdgeInsets.symmetric(vertical: m.spacingXs, horizontal: m.spacingSm),
       child: Container(
         padding: EdgeInsets.all(m.spacingMd),
-        margin: EdgeInsets.only(bottom: m.spacingSm),
         decoration: BoxDecoration(
           color: TvDesignTokens.surface,
           borderRadius: BorderRadius.circular(m.posterRadius),
         ),
         child: Row(
           children: [
-            if (e.imageUrl != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(m.s(4)),
-                child: Image.network(e.imageUrl!,
-                    width: m.s(40),
-                    height: m.s(56),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(m.s(6)),
+              child: MediaImage(
+                imageUrl: img,
+                width: m.s(48),
+                height: m.s(68),
+                fit: BoxFit.cover,
+                cacheWidth: 140,
               ),
-            if (e.imageUrl != null) SizedBox(width: m.spacingMd),
+            ),
+            SizedBox(width: m.spacingMd),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(e.title,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: m.fontSizeMd,
                         color: TvDesignTokens.textPrimary,
                       )),
-                  if (e.subtitle != null)
+                  if (e.subtitle != null && e.subtitle!.isNotEmpty) ...[
+                    SizedBox(height: m.spacingXs),
                     Text(e.subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: m.fontSizeSm,
                           color: TvDesignTokens.textSecondary,
                         )),
+                  ],
                 ],
               ),
             ),
+            if (time != null) ...[
+              SizedBox(width: m.spacingSm),
+              Text(time,
+                  style: TextStyle(
+                      fontSize: m.fontSizeSm,
+                      color: TvDesignTokens.textSecondary)),
+            ],
           ],
         ),
       ),

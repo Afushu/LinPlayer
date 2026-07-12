@@ -7,11 +7,17 @@ import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
 
-/// TV 端「源类型选择器」：添加服务器第一步。焦点可选的纵向卡片列表。
-///
-/// TV 文本输入不便，源类型数量也有限，初版不放搜索框（移动/桌面有搜索）。
-class TvSourcePickerScreen extends StatelessWidget {
+/// TV 端「源类型选择器」：添加服务器第一步。观感对齐移动端
+/// [SourcePickerScreen]（搜索框 + 一列 accent 图标卡片），交互换成焦点驱动。
+class TvSourcePickerScreen extends StatefulWidget {
   const TvSourcePickerScreen({super.key});
+
+  @override
+  State<TvSourcePickerScreen> createState() => _TvSourcePickerScreenState();
+}
+
+class _TvSourcePickerScreenState extends State<TvSourcePickerScreen> {
+  String _query = '';
 
   void _select(BuildContext context, SourceKind kind) {
     if (kind == SourceKind.emby) {
@@ -24,6 +30,7 @@ class TvSourcePickerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = context.tv;
+    final types = kSourceTypes.where((t) => t.matches(_query)).toList();
     return Scaffold(
       backgroundColor: TvDesignTokens.background,
       body: Center(
@@ -43,23 +50,84 @@ class TvSourcePickerScreen extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: m.spacingXl),
-                ...List.generate(kSourceTypes.length, (i) {
-                  final t = kSourceTypes[i];
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: m.spacingMd),
-                    child: TvFocusable(
-                      autofocus: i == 0,
-                      padding: EdgeInsets.all(m.s(4)),
-                      onSelect: () => _select(context, t.kind),
-                      child: _card(m, t),
+                SizedBox(height: m.spacingLg),
+                _searchField(m),
+                SizedBox(height: m.spacingLg),
+                if (types.isEmpty)
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: m.spacingXl),
+                    child: Text(
+                      '没有匹配的源类型',
+                      style: TextStyle(
+                        fontSize: m.fontSizeMd,
+                        color: TvDesignTokens.textSecondary,
+                      ),
                     ),
-                  );
-                }),
+                  )
+                else
+                  ...List.generate(types.length, (i) {
+                    final t = types[i];
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: m.spacingMd),
+                      child: TvFocusable(
+                        autofocus: i == 0,
+                        padding: EdgeInsets.all(m.s(4)),
+                        onSelect: () => _select(context, t.kind),
+                        child: _card(m, t),
+                      ),
+                    );
+                  }),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _searchField(TvMetrics m) {
+    return Focus(
+      child: Builder(
+        builder: (context) {
+          final focused = Focus.of(context).hasFocus;
+          return Container(
+            decoration: BoxDecoration(
+              color: TvDesignTokens.surface,
+              borderRadius: BorderRadius.circular(m.posterRadius),
+              border: Border.all(
+                color: focused ? TvDesignTokens.brand : TvDesignTokens.divider,
+                width: focused ? 3 : 1.5,
+              ),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: m.spacingMd),
+            child: Row(
+              children: [
+                Icon(Icons.search,
+                    color: TvDesignTokens.textSecondary, size: m.s(28)),
+                SizedBox(width: m.spacingSm),
+                Expanded(
+                  child: TextField(
+                    style: TextStyle(
+                      fontSize: m.fontSizeMd,
+                      color: TvDesignTokens.textPrimary,
+                    ),
+                    cursorColor: TvDesignTokens.brand,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: '搜索源类型（Emby、OpenList…）',
+                      hintStyle: TextStyle(
+                        color: TvDesignTokens.textDisabled,
+                        fontSize: m.fontSizeSm,
+                      ),
+                      contentPadding: EdgeInsets.symmetric(vertical: m.spacingMd),
+                    ),
+                    onChanged: (v) => setState(() => _query = v),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

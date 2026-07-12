@@ -71,32 +71,49 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
                   autofocus: index == 0,
                   padding: const EdgeInsets.all(4),
                   onSelect: () => setState(() => _selectedCategory = index),
-                  child: Container(
-                    padding: EdgeInsets.all(m.spacingMd),
+                  child: AnimatedContainer(
+                    duration: TvDesignTokens.focusAnimationDuration,
+                    padding: EdgeInsets.all(m.spacingSm),
                     margin: EdgeInsets.only(bottom: m.spacingSm),
                     decoration: BoxDecoration(
                       color: selected
                           ? TvDesignTokens.brand.withValues(alpha: 0.15)
-                          : null,
+                          : TvDesignTokens.surface,
                       borderRadius: BorderRadius.circular(m.posterRadius),
+                      border: selected
+                          ? Border.all(
+                              color: TvDesignTokens.brand.withValues(alpha: 0.5),
+                              width: m.s(1.5))
+                          : null,
                     ),
                     child: Row(
                       children: [
-                        Icon(category.icon,
-                            color: selected
-                                ? TvDesignTokens.brand
-                                : TvDesignTokens.textSecondary,
-                            size: m.s(28)),
+                        Container(
+                          width: m.s(44),
+                          height: m.s(44),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: TvDesignTokens.brand
+                                .withValues(alpha: selected ? 0.25 : 0.12),
+                            borderRadius: BorderRadius.circular(m.s(12)),
+                          ),
+                          child: Icon(category.icon,
+                              color: TvDesignTokens.brand, size: m.s(24)),
+                        ),
                         SizedBox(width: m.spacingMd),
-                        Text(category.name,
-                            style: TextStyle(
-                                fontSize: m.fontSizeMd,
-                                color: selected
-                                    ? TvDesignTokens.brand
-                                    : TvDesignTokens.textPrimary,
-                                fontWeight: selected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal)),
+                        Expanded(
+                          child: Text(category.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: m.fontSizeMd,
+                                  color: selected
+                                      ? TvDesignTokens.textPrimary
+                                      : TvDesignTokens.textSecondary,
+                                  fontWeight: selected
+                                      ? FontWeight.bold
+                                      : FontWeight.w500)),
+                        ),
                       ],
                     ),
                   ),
@@ -214,6 +231,23 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         value: autoNext,
         onToggle: () =>
             ref.read(autoPlayNextProvider.notifier).state = !autoNext,
+      ),
+      _toggleItem(
+        m,
+        title: '选集卡用缩略图',
+        subtitle: '播放页「选集」底栏用缩略图卡；关闭则用纯集数卡',
+        value: ref.watch(tvEpisodeCardThumbnailProvider),
+        onToggle: () =>
+            ref.read(tvEpisodeCardThumbnailProvider.notifier).state =
+                !ref.read(tvEpisodeCardThumbnailProvider),
+      ),
+      _toggleItem(
+        m,
+        title: '常驻底部进度条',
+        subtitle: '播放时底部常显一条加粗进度条（控制栏未开时也可见）',
+        value: ref.watch(tvPinnedProgressBarProvider),
+        onToggle: () => ref.read(tvPinnedProgressBarProvider.notifier).state =
+            !ref.read(tvPinnedProgressBarProvider),
       ),
       _toggleItem(
         m,
@@ -565,24 +599,27 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         m,
         title: '手机扫码遥控',
         subtitle: '生成局域网二维码，用手机编辑设置/服务器并遥控播放',
-        trailing: Icon(Icons.qr_code_2,
-            color: TvDesignTokens.brand, size: m.s(28)),
+        leadingIcon: Icons.qr_code_2,
+        trailing: Icon(Icons.chevron_right,
+            color: TvDesignTokens.textSecondary, size: m.s(28)),
         onSelect: () => context.push('/tv/lan-control'),
       ),
       _rowCard(
         m,
         title: '配置二维码',
         subtitle: '把本机服务器(含登录凭据)出成二维码，用手机扫码导入',
-        trailing: Icon(Icons.qr_code_scanner,
-            color: TvDesignTokens.brand, size: m.s(28)),
+        leadingIcon: Icons.qr_code_scanner,
+        trailing: Icon(Icons.chevron_right,
+            color: TvDesignTokens.textSecondary, size: m.s(28)),
         onSelect: () => context.push('/tv/config-qr'),
       ),
       _rowCard(
         m,
         title: '插件',
         subtitle: '从插件市场一键安装、启用/卸载插件（TV 无需文件导入）',
-        trailing: Icon(Icons.extension,
-            color: TvDesignTokens.brand, size: m.s(28)),
+        leadingIcon: Icons.extension,
+        trailing: Icon(Icons.chevron_right,
+            color: TvDesignTokens.textSecondary, size: m.s(28)),
         onSelect: () => context.push('/tv/plugins'),
       ),
       _fontItem(
@@ -664,7 +701,9 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         m,
         title: 'CF 优选反代',
         subtitle: '为走 Cloudflare 的服务器优选边缘 IP 并本地反代提速（支持定时复测）',
-        trailing: Icon(Icons.bolt, color: TvDesignTokens.brand, size: m.s(28)),
+        leadingIcon: Icons.bolt,
+        trailing: Icon(Icons.chevron_right,
+            color: TvDesignTokens.textSecondary, size: m.s(28)),
         onSelect: () => context.push('/tv/cf-proxy'),
       ));
 
@@ -1030,18 +1069,21 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         m,
         title: '检查更新',
         subtitle: '当前 $kAppVersion · 启动与每 24 小时自动检查',
+        leadingIcon: Icons.system_update,
         onTap: _checkUpdateTv,
       ),
       _actionItem(
         m,
         title: '导出日志',
         subtitle: '导出到文件并复制路径（排查问题用）',
+        leadingIcon: Icons.description_outlined,
         onTap: _exportLogs,
       ),
       _actionItem(
         m,
         title: '重新查看引导',
         subtitle: '打开 TV 引导页',
+        leadingIcon: Icons.explore_outlined,
         onTap: () => context.go('/tv/onboarding'),
       ),
     ]);
@@ -1099,7 +1141,8 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
     TvMetrics m, {
     required String title,
     String? subtitle,
-    required Widget trailing,
+    IconData? leadingIcon,
+    Widget? trailing,
     required VoidCallback onSelect,
   }) {
     return TvFocusable(
@@ -1114,6 +1157,20 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         ),
         child: Row(
           children: [
+            if (leadingIcon != null) ...[
+              Container(
+                width: m.s(44),
+                height: m.s(44),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: TvDesignTokens.brand.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(m.s(12)),
+                ),
+                child: Icon(leadingIcon,
+                    color: TvDesignTokens.brand, size: m.s(24)),
+              ),
+              SizedBox(width: m.spacingMd),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1121,7 +1178,8 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
                   Text(title,
                       style: TextStyle(
                           fontSize: m.fontSizeMd,
-                          color: TvDesignTokens.textPrimary)),
+                          color: TvDesignTokens.textPrimary,
+                          fontWeight: FontWeight.w600)),
                   if (subtitle != null) ...[
                     SizedBox(height: m.s(2)),
                     Text(subtitle,
@@ -1132,8 +1190,10 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
                 ],
               ),
             ),
-            SizedBox(width: m.spacingMd),
-            trailing,
+            if (trailing != null) ...[
+              SizedBox(width: m.spacingMd),
+              trailing,
+            ],
           ],
         ),
       ),
@@ -1239,7 +1299,6 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
       title: title,
       subtitle: subtitle,
       onSelect: () {},
-      trailing: const SizedBox.shrink(),
     );
   }
 
@@ -1256,6 +1315,7 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
       m,
       title: title,
       subtitle: isSet ? p.basename(path) : defaultHint,
+      leadingIcon: Icons.font_download_outlined,
       trailing: Icon(isSet ? Icons.clear : Icons.folder_open,
           color: TvDesignTokens.textSecondary, size: m.s(28)),
       onSelect: () {
@@ -1311,12 +1371,14 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
     TvMetrics m, {
     required String title,
     String? subtitle,
+    IconData? leadingIcon,
     required VoidCallback onTap,
   }) {
     return _rowCard(
       m,
       title: title,
       subtitle: subtitle,
+      leadingIcon: leadingIcon,
       onSelect: onTap,
       trailing: Icon(Icons.chevron_right,
           color: TvDesignTokens.textSecondary, size: m.s(28)),

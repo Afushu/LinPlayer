@@ -10,6 +10,7 @@ import '../../../core/sources/anirss/anirss_nav_args.dart';
 import '../../../core/sources/anirss/anirss_providers.dart';
 import '../../../core/sources/anirss/models/ani.dart';
 import '../../../core/sources/anirss/models/play_item.dart';
+import '../../../core/sources/anirss/models/tmdb.dart';
 import '../../../core/sources/source_playback.dart';
 import '../../../ui/widgets/anirss/anirss_detail_actions.dart';
 import '../../../ui/widgets/anirss/anirss_version_picker.dart';
@@ -102,6 +103,10 @@ class _Body extends StatelessWidget {
                 if (overview != null && overview.isNotEmpty) ...[
                   SizedBox(height: m.spacingLg),
                   _buildSynopsis(m, overview),
+                ],
+                if (tmdb != null && tmdb.cast.isNotEmpty) ...[
+                  SizedBox(height: m.spacingLg),
+                  _buildCast(m, tmdb.cast),
                 ],
                 SizedBox(height: m.spacingXxl),
               ],
@@ -276,6 +281,78 @@ class _Body extends StatelessWidget {
             fontSize: m.fontSizeSm,
             color: TvDesignTokens.textSecondary,
             height: TvDesignTokens.lineHeightRelaxed,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 演员表（横向滚动，对齐移动端 _CastRow；纯展示，无需焦点）。
+  Widget _buildCast(TvMetrics m, List<TmdbCast> cast) {
+    final cardW = m.s(96);
+    final avatar = m.s(84);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '演员',
+          style: TextStyle(
+            fontSize: m.fontSizeLg,
+            color: TvDesignTokens.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: m.spacingMd),
+        SizedBox(
+          height: avatar + m.s(58),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: cast.length > 20 ? 20 : cast.length,
+            separatorBuilder: (_, __) => SizedBox(width: m.spacingMd),
+            itemBuilder: (context, i) {
+              final c = cast[i];
+              final img = _tmdbCandidates(c.profilePath, 'w185');
+              return SizedBox(
+                width: cardW,
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: avatar,
+                      height: avatar,
+                      child: MediaImage(
+                        imageUrl: img.isEmpty ? null : img.first,
+                        imageUrls: img.length > 1 ? img.sublist(1) : null,
+                        fit: BoxFit.cover,
+                        borderRadius: BorderRadius.circular(avatar / 2),
+                      ),
+                    ),
+                    SizedBox(height: m.spacingXs),
+                    Text(
+                      c.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: m.fontSizeXs,
+                        color: TvDesignTokens.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (c.character != null)
+                      Text(
+                        c.character!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: m.fs(12),
+                          color: TvDesignTokens.textSecondary,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],

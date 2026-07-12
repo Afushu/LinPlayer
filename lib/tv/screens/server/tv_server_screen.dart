@@ -13,7 +13,8 @@ import '../../widgets/tv_focusable.dart';
 import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 
-/// TV 服务器页 —— 真实服务器列表，支持切换当前服务器、删除、跳转添加。
+/// TV 服务器页 —— 观感对齐移动端服务器列表：卡片（图标+名称+备注）+ 右侧「更多」
+/// 唤起面板（编辑/删除），焦点驱动。逻辑沿用：切换当前服务器、编辑、删除。
 class TvServerScreen extends ConsumerWidget {
   const TvServerScreen({super.key});
 
@@ -30,13 +31,26 @@ class TvServerScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '服务器',
-              style: TextStyle(
-                fontSize: m.fontSizeXxl,
-                color: TvDesignTokens.textPrimary,
-                fontWeight: FontWeight.bold,
-              ),
+            // 标题栏：对齐移动端 AppBar（标题 + 右侧添加）。
+            Row(
+              children: [
+                Text(
+                  '服务器',
+                  style: TextStyle(
+                    fontSize: m.fontSizeXxl,
+                    color: TvDesignTokens.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                if (servers.isNotEmpty)
+                  TvFocusable(
+                    padding: EdgeInsets.all(m.spacingXs),
+                    onSelect: () => context.go('/tv/add-server'),
+                    child: Icon(Icons.add,
+                        color: TvDesignTokens.textPrimary, size: m.s(34)),
+                  ),
+              ],
             ),
             SizedBox(height: m.spacingLg),
             Expanded(
@@ -51,16 +65,11 @@ class TvServerScreen extends ConsumerWidget {
                             entry.value,
                             m,
                             isCurrent: entry.value.id == current?.id,
+                            autofocus: entry.key == 0,
                           ).animate().fadeIn(
                                 delay: Duration(milliseconds: 40 * entry.key),
                                 duration: TvDesignTokens.contentFadeDuration,
                               ),
-                        SizedBox(height: m.spacingMd),
-                        TvButton(
-                          text: '添加服务器',
-                          icon: Icons.add,
-                          onPressed: () => context.go('/tv/add-server'),
-                        ),
                       ],
                     ),
             ),
@@ -101,15 +110,20 @@ class TvServerScreen extends ConsumerWidget {
     ServerConfig server,
     TvMetrics m, {
     required bool isCurrent,
+    bool autofocus = false,
   }) {
     final online = serverHasUsableAuth(server);
+    final subtitle = (server.remark != null && server.remark!.isNotEmpty)
+        ? server.remark!
+        : server.baseUrl;
     return Padding(
       padding: EdgeInsets.only(bottom: m.spacingMd),
       child: TvFocusable(
+        autofocus: autofocus,
         padding: EdgeInsets.all(m.s(6)),
         onSelect: () => _selectServer(context, ref, server),
-        // 长按（Pad）/ 遥控器菜单键 → 进入编辑模式。
-        onLongPress: () => context.push('/tv/edit-server/${server.id}'),
+        // 长按（Pad）/ 遥控器菜单键 → 唤起「更多」面板。
+        onLongPress: () => _showMoreMenu(context, ref, server),
         child: Container(
           padding: EdgeInsets.all(m.spacingLg),
           decoration: BoxDecoration(
@@ -124,14 +138,12 @@ class TvServerScreen extends ConsumerWidget {
           child: Row(
             children: [
               Container(
-                width: m.s(64),
-                height: m.s(64),
+                width: m.s(56),
+                height: m.s(56),
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: (online ? TvDesignTokens.success : TvDesignTokens.error)
-                      .withValues(alpha: 0.2),
-                  borderRadius:
-                      BorderRadius.circular(m.posterRadius),
+                  color: TvDesignTokens.brand.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(m.s(12)),
                 ),
                 // 有自定义图标（本地图片/网络图标）就显示图标，否则退回机房图标。
                 child: (server.iconUrl != null && server.iconUrl!.isNotEmpty)
@@ -141,11 +153,8 @@ class TvServerScreen extends ConsumerWidget {
                         useDefaultUserAgent: true,
                         errorWidget: const EmbyDefaultIcon(),
                       )
-                    : Icon(Icons.storage,
-                        color: online
-                            ? TvDesignTokens.success
-                            : TvDesignTokens.error,
-                        size: m.s(32)),
+                    : Icon(Icons.dns,
+                        color: TvDesignTokens.brand, size: m.s(30)),
               ),
               SizedBox(width: m.spacingLg),
               Expanded(
@@ -164,7 +173,7 @@ class TvServerScreen extends ConsumerWidget {
                               color: isCurrent
                                   ? TvDesignTokens.brand
                                   : TvDesignTokens.textPrimary,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -187,13 +196,6 @@ class TvServerScreen extends ConsumerWidget {
                       ],
                     ),
                     SizedBox(height: m.spacingXs),
-                    Text(server.baseUrl,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: m.fontSizeSm,
-                            color: TvDesignTokens.textSecondary)),
-                    SizedBox(height: m.spacingXs),
                     Row(
                       children: [
                         Container(
@@ -207,29 +209,26 @@ class TvServerScreen extends ConsumerWidget {
                           ),
                         ),
                         SizedBox(width: m.spacingXs),
-                        Text(online ? '已登录' : '未登录',
-                            style: TextStyle(
-                                fontSize: m.fontSizeXs,
-                                color: online
-                                    ? TvDesignTokens.success
-                                    : TvDesignTokens.error)),
+                        Expanded(
+                          child: Text(subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: m.fontSizeSm,
+                                  color: TvDesignTokens.textSecondary)),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
+              SizedBox(width: m.spacingSm),
+              // 「更多」——对齐移动端卡片右侧的 more_vert，唤起选项面板。
               TvFocusable(
                 padding: EdgeInsets.all(m.spacingXs),
-                onSelect: () => context.push('/tv/edit-server/${server.id}'),
-                child: Icon(Icons.edit_outlined,
+                onSelect: () => _showMoreMenu(context, ref, server),
+                child: Icon(Icons.more_vert,
                     color: TvDesignTokens.textSecondary, size: m.s(28)),
-              ),
-              SizedBox(width: m.spacingXs),
-              TvFocusable(
-                padding: EdgeInsets.all(m.spacingXs),
-                onSelect: () => _confirmDelete(context, ref, server),
-                child: Icon(Icons.delete_outline,
-                    color: TvDesignTokens.error, size: m.s(28)),
               ),
             ],
           ),
@@ -254,48 +253,34 @@ class TvServerScreen extends ConsumerWidget {
     TvToast.show(context, '已切换到 ${server.name}');
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref, ServerConfig server) {
+  /// 「更多」面板：对齐移动端底部菜单（编辑 / 删除）。
+  void _showMoreMenu(BuildContext context, WidgetRef ref, ServerConfig server) {
     showDialog(
       context: context,
+      barrierColor: Colors.transparent,
       builder: (dialogContext) {
-        final m = dialogContext.tv;
         return TvPanel(
-          title: '删除服务器',
+          title: server.name,
           onClose: () => Navigator.pop(dialogContext),
           children: [
-            Text('确定要删除 “${server.name}” 吗？',
-                style: TextStyle(
-                    fontSize: m.fontSizeMd,
-                    color: TvDesignTokens.textPrimary)),
-            SizedBox(height: m.spacingLg),
-            Row(
-              children: [
-                Expanded(
-                  child: TvFocusable(
-                    autofocus: true,
-                    onSelect: () => Navigator.pop(dialogContext),
-                    child: _dialogButton('取消', TvDesignTokens.surface,
-                        TvDesignTokens.textPrimary, m),
-                  ),
-                ),
-                SizedBox(width: m.spacingMd),
-                Expanded(
-                  child: TvFocusable(
-                    onSelect: () {
-                      ref
-                          .read(serverListProvider.notifier)
-                          .removeServer(server.id);
-                      if (ref.read(currentServerProvider)?.id == server.id) {
-                        ref.read(currentServerProvider.notifier).clear();
-                      }
-                      Navigator.pop(dialogContext);
-                      TvToast.show(context, '服务器已删除');
-                    },
-                    child: _dialogButton(
-                        '删除', TvDesignTokens.error, Colors.white, m),
-                  ),
-                ),
-              ],
+            TvPanelOption(
+              title: '编辑信息',
+              leading: const Icon(Icons.edit_outlined,
+                  color: TvDesignTokens.textPrimary),
+              onTap: () {
+                Navigator.pop(dialogContext);
+                context.push('/tv/edit-server/${server.id}');
+              },
+            ),
+            SizedBox(height: dialogContext.tv.spacingXs),
+            TvPanelOption(
+              title: '删除',
+              leading: const Icon(Icons.delete_outline,
+                  color: TvDesignTokens.error),
+              onTap: () {
+                Navigator.pop(dialogContext);
+                _confirmDelete(context, ref, server);
+              },
             ),
           ],
         );
@@ -303,20 +288,20 @@ class TvServerScreen extends ConsumerWidget {
     );
   }
 
-  Widget _dialogButton(String text, Color bg, Color fg, TvMetrics m) {
-    return Container(
-      padding: EdgeInsets.all(m.spacingMd),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(m.posterRadius),
-      ),
-      child: Center(
-        child: Text(text,
-            style: TextStyle(
-                fontSize: m.fontSizeMd,
-                color: fg,
-                fontWeight: FontWeight.bold)),
-      ),
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, ServerConfig server) async {
+    final ok = await showTvConfirm(
+      context,
+      title: '删除服务器',
+      message: '确定要删除 “${server.name}” 吗？',
+      confirmLabel: '删除',
+      danger: true,
     );
+    if (!ok) return;
+    ref.read(serverListProvider.notifier).removeServer(server.id);
+    if (ref.read(currentServerProvider)?.id == server.id) {
+      ref.read(currentServerProvider.notifier).clear();
+    }
+    if (context.mounted) TvToast.show(context, '服务器已删除');
   }
 }

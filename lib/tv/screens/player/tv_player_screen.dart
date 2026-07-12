@@ -31,14 +31,13 @@ import '../../../core/services/font_service.dart';
 import '../../../core/services/video_player_service.dart';
 import '../../../core/sources/source_playback.dart';
 import '../../../core/sources/source_registry.dart';
-import '../../../ui/widgets/common/source_quality_button.dart';
 import '../../../core/utils/playback_error_text.dart';
 import '../../../core/utils/playback_url_resolver.dart';
 import '../../../core/utils/track_preference.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../services/lan_remote.dart';
-import '../../widgets/tv_control_overlay.dart';
+import '../../widgets/tv_player_osd.dart';
 import '../../widgets/tv_panel.dart';
 
 /// TV 播放页 —— 接入 VideoPlayerService 真实播放 + 遥控器控制 + 看完自动同步。
@@ -58,6 +57,8 @@ class TvPlayerScreen extends ConsumerStatefulWidget {
 
 class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
   final VideoPlayerService _service = VideoPlayerService();
+  // 控制栏隐藏时把焦点收回这里，避免隐藏中的按钮误吃遥控器按键。
+  final FocusNode _rootFocus = FocusNode(debugLabel: 'tvPlayerRoot');
   bool _ready = false;
   String? _error;
   MediaItem? _item;
@@ -66,6 +67,10 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
   bool _didScrobble = false;
   bool _handledCompletion = false;
   MediaSource? _mediaSource;
+  // OSD「选集」栏用：本剧当前季全集；「版本」栏用：本片多版本媒体源。
+  List<Episode> _episodes = const [];
+  List<MediaSource> _versions = const [];
+  String? _selectedVersionId;
   StreamingSubtitleTranslator? _streamTranslator;
   late final IntroSkipController _introSkip;
   List<DanmakuMatchCandidate> _danmakuCandidates = [];
@@ -94,6 +99,7 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     _streamTranslator?.stop();
     _introSkip.dispose();
     _service.removeListener(_onTick);
+    _rootFocus.dispose();
     unawaited(PrefetchProxy.instance.stop());
     _service.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -286,10 +292,11 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     if (mounted) context.pop();
   }
 
-  Future<void> _init() async {
+  Future<void> _init({Duration? startPositionOverride}) async {
     // 网盘/聚合源直链：走专属初始化，复用本播放页 UI/内核。
     if (widget.sourcePlay != null) {
-      await _initSourcePlayer(widget.sourcePlay!);
+      await _initSourcePlayer(widget.sourcePlay!,
+          startPosition: startPositionOverride);
       return;
     }
     if (_itemId.isEmpty) {
@@ -372,10 +379,14 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
       // （含跨服务器续播），回退服务器 userData。旧实现只读服务器 userData，会漏掉
       // 本地已记录但未同步到服务器的进度，导致 TV“经常续不上”。
       Duration? startPosition;
-      try {
-        startPosition = await resolveResumeStartPosition(ref, api, item);
-      } catch (_) {
-        startPosition = null;
+      if (startPositionOverride != null) {
+        startPosition = startPositionOverride;
+      } else {
+        try {
+          startPosition = await resolveResumeStartPosition(ref, api, item);
+        } catch (_) {
+          startPosition = null;
+        }
       }
 
       await _service.initialize(
@@ -421,7 +432,11 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
 
       _item = item;
       _mediaSource = selection.mediaSource;
+      _versions = playbackInfo.mediaSources;
+      _selectedVersionId = selection.mediaSource?.id;
       ref.read(currentPlayingItemProvider.notifier).state = item;
+      // OSD「选集」栏：拉本剧当前季全集（仅剧集）。
+      unawaited(_loadEpisodes(item));
       // 弹幕：起播自动并行匹配，命中最佳候选即加载（TV 输入不便，默认自动）。
       unawaited(_autoLoadDanmaku(item));
       // 自动跳过片头/片尾：联网识别本集片段（仅剧集，受设置开关控制）。
@@ -661,51 +676,6 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     );
   }
 
-  Future<void> _showDanmakuPanel() async {
-    _revealControls();
-    final enabled = ref.read(danmakuEnabledProvider);
-    if (!mounted) return;
-    await showDialog(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (ctx) => TvPanel(
-        title: '弹幕',
-        onClose: () => Navigator.pop(ctx),
-        children: [
-          TvPanelOption(
-            title: enabled ? '隐藏弹幕' : '显示弹幕',
-            isSelected: enabled,
-            onTap: () {
-              ref.read(danmakuEnabledProvider.notifier).state = !enabled;
-              Navigator.pop(ctx);
-            },
-          ),
-          TvPanelOption(
-            title: '本地导入弹幕',
-            subtitle: '.xml / .json / .ass 文件',
-            onTap: () {
-              Navigator.pop(ctx);
-              unawaited(_importLocalDanmaku());
-            },
-          ),
-          if (_danmakuCandidates.isEmpty)
-            const TvPanelOption(title: '未匹配到弹幕', subtitle: '可在手机/桌面端搜索')
-          else
-            for (final c in _danmakuCandidates.take(12))
-              TvPanelOption(
-                title: '${c.animeTitle} · ${c.episodeTitle}',
-                subtitle: c.sourceName,
-                isSelected: _danmakuLoadedEpisodeId == c.episodeId,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  unawaited(_loadDanmakuFrom(c));
-                },
-              ),
-        ],
-      ),
-    );
-  }
-
   // ============ 字幕 / 音轨 ============
 
   /// 轨道信息在 initialize 后可能稍有延迟，轮询几次直到就绪。
@@ -773,53 +743,6 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     final lang = t['language']?.toString();
     if (lang != null && lang.trim().isNotEmpty) return lang;
     return '轨道 ${t['trackIndex'] ?? t['id'] ?? ''}';
-  }
-
-  Future<void> _showSubtitlePanel() async {
-    _revealControls();
-    final subs = await _tracksOfType({'text', 'bitmap'});
-    if (!mounted) return;
-    final current = _service.selectedSubtitleTrackId;
-    showDialog(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (dialogContext) => TvPanel(
-        title: '字幕',
-        onClose: () => Navigator.pop(dialogContext),
-        children: [
-          TvPanelOption(
-            title: '关闭',
-            isSelected: current == null,
-            onTap: () {
-              _stopStreamingTranslate();
-              _service.deselectSubtitleTrack();
-              ref.read(subtitleTrackProvider.notifier).state = null;
-              Navigator.pop(dialogContext);
-            },
-          ),
-          TvPanelOption(
-            title: '翻译字幕（生成中文）',
-            subtitle: '用已配置的翻译引擎把字幕译为中文',
-            onTap: () {
-              Navigator.pop(dialogContext);
-              _translateSubtitle();
-            },
-          ),
-          for (final t in subs)
-            TvPanelOption(
-              title: _trackLabel(t),
-              subtitle: (t['type'] == 'bitmap') ? '图形字幕' : t['codec']?.toString(),
-              isSelected: t['id']?.toString() == current,
-              onTap: () {
-                _stopStreamingTranslate();
-                final id = t['id']?.toString();
-                if (id != null) _service.selectSubtitleTrack(id);
-                Navigator.pop(dialogContext);
-              },
-            ),
-        ],
-      ),
-    );
   }
 
   /// 翻译字幕轨为中文并加载（TV）。
@@ -975,34 +898,6 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     );
   }
 
-  Future<void> _showAudioPanel() async {
-    _revealControls();
-    final audios = await _tracksOfType({'audio'});
-    if (!mounted) return;
-    final current = _service.selectedAudioTrackId;
-    showDialog(
-      context: context,
-      barrierColor: Colors.transparent,
-      builder: (dialogContext) => TvPanel(
-        title: '音轨',
-        onClose: () => Navigator.pop(dialogContext),
-        children: [
-          for (final t in audios)
-            TvPanelOption(
-              title: _trackLabel(t),
-              subtitle: t['codec']?.toString(),
-              isSelected: t['id']?.toString() == current,
-              onTap: () {
-                final id = t['id']?.toString();
-                if (id != null) _service.selectAudioTrack(id);
-                Navigator.pop(dialogContext);
-              },
-            ),
-        ],
-      ),
-    );
-  }
-
   // ============ 控制 ============
 
   void _scheduleHide() {
@@ -1010,6 +905,7 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     _hideTimer = Timer(TvDesignTokens.playerControlHideDelay, () {
       if (mounted && _service.isPlaying) {
         setState(() => _showControls = false);
+        _rootFocus.requestFocus();
       }
     });
   }
@@ -1024,6 +920,7 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     if (_showControls) {
       _hideTimer?.cancel();
       setState(() => _showControls = false);
+      _rootFocus.requestFocus();
     } else {
       _revealControls();
     }
@@ -1049,6 +946,59 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     _revealControls();
   }
 
+  /// 收起 OSD（进度条栏再按 ↑ 或按返回时），焦点收回根节点。
+  void _hideOsd() {
+    _hideTimer?.cancel();
+    if (mounted) setState(() => _showControls = false);
+    _rootFocus.requestFocus();
+  }
+
+  /// OSD「选集」栏数据：本剧当前季全集（仅剧集）。
+  Future<void> _loadEpisodes(MediaItem item) async {
+    if (item.seriesId == null) return;
+    try {
+      final eps = await ref
+          .read(apiClientProvider)
+          .media
+          .getEpisodes(item.seriesId!, seasonId: item.seasonId);
+      if (mounted) setState(() => _episodes = eps);
+    } catch (_) {}
+  }
+
+  /// 「版本」栏切换多版本媒体源：记进度→按新版本重载播放器→续播。
+  Future<void> _switchVersion(MediaSource v) async {
+    if (v.id == _selectedVersionId) return;
+    ref.read(selectedMediaSourceProvider.notifier).state = v.id;
+    ref.read(audioTrackProvider.notifier).state = null;
+    ref.read(subtitleTrackProvider.notifier).state = null;
+    await _reinitAt(_service.position);
+  }
+
+  /// 「线路」栏切换服务器线路：换线路后媒体源可能变，重取 PlaybackInfo 重载→续播。
+  Future<void> _switchLine(int index) async {
+    final server = ref.read(currentServerProvider);
+    if (server == null) return;
+    ref.read(serverListProvider.notifier).setActiveLine(server.id, index);
+    final updated =
+        ref.read(serverListProvider).firstWhere((s) => s.id == server.id);
+    ref.read(currentServerProvider.notifier).state = updated;
+    ref.read(selectedMediaSourceProvider.notifier).state = null;
+    ref.read(audioTrackProvider.notifier).state = null;
+    ref.read(subtitleTrackProvider.notifier).state = null;
+    await _reinitAt(_service.position);
+  }
+
+  /// 版本/线路切换共用：在当前进度处重跑初始化（复用网盘换清晰度的续播套路）。
+  Future<void> _reinitAt(Duration pos) async {
+    _stopStreamingTranslate();
+    _didScrobble = false;
+    _handledCompletion = false;
+    _hideOsd();
+    await _init(startPositionOverride: pos);
+  }
+
+  /// 遥控器根键位（在焦点链最外层）：控制栏隐藏时任意键先唤出；显示时把方向键
+  /// 交给焦点遍历（中央/顶栏/底栏按钮）与进度条（左右快进退），确认键交给聚焦按钮。
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -1056,38 +1006,51 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     final key = event.logicalKey;
     final step = ref.read(skipForwardStepProvider);
 
-    if (key == LogicalKeyboardKey.escape ||
-        key == LogicalKeyboardKey.goBack) {
+    // 返回：控制栏显示中先收起，否则退出播放。
+    if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
       if (_showControls && _service.isPlaying) {
+        _hideTimer?.cancel();
         setState(() => _showControls = false);
+        _rootFocus.requestFocus();
       } else {
         context.pop();
       }
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.space ||
-        key == LogicalKeyboardKey.mediaPlayPause) {
+
+    // 媒体键始终可用（不依赖焦点位置）。
+    if (key == LogicalKeyboardKey.mediaPlayPause) {
       _togglePlay();
       _revealControls();
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.arrowRight ||
-        key == LogicalKeyboardKey.mediaFastForward) {
+    if (key == LogicalKeyboardKey.mediaFastForward) {
       _seek(step);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.arrowLeft ||
-        key == LogicalKeyboardKey.mediaRewind) {
+    if (key == LogicalKeyboardKey.mediaRewind) {
       _seek(-step);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.arrowUp ||
-        key == LogicalKeyboardKey.arrowDown) {
-      _revealControls();
-      return KeyEventResult.handled;
+
+    // 控制栏隐藏：任意方向/确认键仅唤出控制栏，不触发按钮动作。
+    if (!_showControls) {
+      final wake = key == LogicalKeyboardKey.arrowUp ||
+          key == LogicalKeyboardKey.arrowDown ||
+          key == LogicalKeyboardKey.arrowLeft ||
+          key == LogicalKeyboardKey.arrowRight ||
+          key == LogicalKeyboardKey.select ||
+          key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.space;
+      if (wake) {
+        _revealControls();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
     }
+
+    // 控制栏显示：重置隐藏计时，方向键交给焦点遍历/进度条，确认键交给聚焦按钮。
+    _scheduleHide();
     return KeyEventResult.ignored;
   }
 
@@ -1096,12 +1059,11 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     final m = context.tv;
     final dur = _service.duration;
     final pos = _service.position;
-    final progress =
-        dur.inMilliseconds > 0 ? pos.inMilliseconds / dur.inMilliseconds : 0.0;
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: Focus(
+        focusNode: _rootFocus,
         autofocus: true,
         onKeyEvent: _onKey,
         child: Stack(
@@ -1164,9 +1126,9 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
                   ),
                 ),
               ),
-            // 自动跳过片头/片尾按钮：左下角、随控制栏显隐；出现时自动获焦，
-            // 遥控器按确认即跳。
-            if (_ready && _showControls)
+            // 自动跳过片头/片尾按钮：OSD 未开时出现在左下、自动获焦，确认即跳；
+            // 打开 OSD 后让位给底栏导航（隐藏）。
+            if (_ready && !_showControls)
               Positioned(
                 left: m.s(48),
                 bottom: m.s(120),
@@ -1190,42 +1152,101 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
                   },
                 ),
               ),
+            // 常驻进度条（设置项开启且 OSD 未开时）：底部一条加粗进度条做参考。
+            if (_ready &&
+                !_showControls &&
+                ref.watch(tvPinnedProgressBarProvider))
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildPinnedProgress(m, pos, dur),
+              ),
+            // 流媒体式单栏轮播 OSD（顶栏标题+时钟 / 底栏进度·选集·字幕·音频·弹幕·倍速·版本·线路）。
             if (_ready)
-              AnimatedOpacity(
-                duration: TvDesignTokens.playerControlFadeDuration,
-                opacity: _showControls ? 1.0 : 0.0,
-                child: IgnorePointer(
-                  ignoring: !_showControls,
-                  child: TvControlOverlay(
-                    isPlaying: _service.isPlaying,
-                    isPaused: !_service.isPlaying,
-                    currentTime: pos,
-                    totalTime: dur,
-                    progress: progress.clamp(0.0, 1.0),
-                    title: _item?.name ?? '正在播放',
-                    onPlayPause: _togglePlay,
-                    onSeekBackward: () =>
-                        _seek(-ref.read(skipForwardStepProvider)),
-                    onSeekForward: () =>
-                        _seek(ref.read(skipForwardStepProvider)),
-                    onSeek: (p) {
-                      _service.seekTo(dur * p);
-                      _revealControls();
-                    },
-                    onSubtitle: _showSubtitlePanel,
-                    onAudioTrack: _showAudioPanel,
-                    onMore: _showDanmakuPanel,
-                    onClose: () => context.pop(),
-                  ),
+              Positioned.fill(
+                child: TvPlayerOsd(
+                  visible: _showControls,
+                  service: _service,
+                  item: _item,
+                  position: pos,
+                  duration: dur,
+                  isPlaying: _service.isPlaying,
+                  episodes: _episodes,
+                  versions: _versions,
+                  selectedVersionId: _selectedVersionId,
+                  sourceQualities: widget.sourcePlay != null
+                      ? ref.watch(sourcePlayQualitiesProvider)
+                      : const [],
+                  selectedQualityId: ref.watch(sourceSelectedQualityProvider),
+                  isSourcePlay: widget.sourcePlay != null,
+                  danmakuCandidates: _danmakuCandidates,
+                  loadedDanmakuEpisodeId: _danmakuLoadedEpisodeId,
+                  onActivity: _scheduleHide,
+                  onRequestHide: _hideOsd,
+                  onSeekForward: () =>
+                      _seek(ref.read(skipForwardStepProvider)),
+                  onSeekBackward: () =>
+                      _seek(-ref.read(skipForwardStepProvider)),
+                  onTogglePlay: _togglePlay,
+                  onSelectVersion: _switchVersion,
+                  onSelectQuality: _switchSourceQuality,
+                  onSelectLine: _switchLine,
+                  onLoadDanmaku: (c) => unawaited(_loadDanmakuFrom(c)),
+                  onImportLocalDanmaku: () => unawaited(_importLocalDanmaku()),
+                  onTranslateSubtitle: _translateSubtitle,
                 ),
               ),
-            // 网盘转码源（夸克等）清晰度切换：仅源直链播放且有多档时显示。
-            if (_ready && _showControls && widget.sourcePlay != null)
-              Positioned(
-                right: m.s(48),
-                bottom: m.s(120),
-                child: SourceQualityButton(onSelect: _switchSourceQuality),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 常驻底部进度条（设置项）：加粗、只读，OSD 未开时提供进度参考。
+  Widget _buildPinnedProgress(TvMetrics m, Duration pos, Duration dur) {
+    final p =
+        dur.inMilliseconds > 0 ? pos.inMilliseconds / dur.inMilliseconds : 0.0;
+    String fmt(Duration d) {
+      final h = d.inHours;
+      final mm = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+      final ss = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+      return h > 0 ? '${h.toString().padLeft(2, '0')}:$mm:$ss' : '$mm:$ss';
+    }
+
+    final style = TextStyle(
+        color: Colors.white,
+        fontSize: m.fontSizeSm,
+        fontFeatures: const [FontFeature.tabularFigures()]);
+    return IgnorePointer(
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+            m.spacingXl, m.spacingXl, m.spacingXl, m.spacingLg),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Color(0xB3000000)],
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(fmt(pos), style: style),
+            SizedBox(width: m.spacingLg),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(m.s(6)),
+                child: LinearProgressIndicator(
+                  value: p.clamp(0.0, 1.0),
+                  minHeight: m.s(12),
+                  backgroundColor: Colors.white.withValues(alpha: 0.28),
+                  valueColor:
+                      const AlwaysStoppedAnimation(TvDesignTokens.brand),
+                ),
               ),
+            ),
+            SizedBox(width: m.spacingLg),
+            Text(fmt(dur), style: style),
           ],
         ),
       ),

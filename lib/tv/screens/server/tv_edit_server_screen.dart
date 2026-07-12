@@ -114,18 +114,19 @@ class _TvEditServerScreenState extends ConsumerState<TvEditServerScreen> {
               children: [
                 Expanded(
                   child: TvFocusable(
+                    padding: EdgeInsets.all(m.s(4)),
                     onSelect: () => Navigator.pop(dialogContext, false),
-                    child: _pillButton('取消', TvDesignTokens.surface,
-                        TvDesignTokens.textPrimary, m),
+                    child: const TvDialogButton('取消', fullWidth: true),
                   ),
                 ),
                 SizedBox(width: m.spacingMd),
                 Expanded(
                   child: TvFocusable(
                     autofocus: true,
+                    padding: EdgeInsets.all(m.s(4)),
                     onSelect: () => Navigator.pop(dialogContext, true),
-                    child: _pillButton(
-                        '确定', TvDesignTokens.brand, Colors.white, m),
+                    child: const TvDialogButton('确定',
+                        filled: true, fullWidth: true),
                   ),
                 ),
               ],
@@ -232,17 +233,18 @@ class _TvEditServerScreenState extends ConsumerState<TvEditServerScreen> {
                   children: [
                     Expanded(
                       child: TvFocusable(
+                        padding: EdgeInsets.all(m.s(4)),
                         onSelect: () => context.pop(),
-                        child: _pillButton('取消', TvDesignTokens.surface,
-                            TvDesignTokens.textPrimary, m),
+                        child: const TvDialogButton('取消', fullWidth: true),
                       ),
                     ),
                     SizedBox(width: m.spacingMd),
                     Expanded(
                       child: TvFocusable(
+                        padding: EdgeInsets.all(m.s(4)),
                         onSelect: _save,
-                        child: _pillButton(
-                            '保存', TvDesignTokens.brand, Colors.white, m),
+                        child: const TvDialogButton('保存',
+                            filled: true, fullWidth: true),
                       ),
                     ),
                   ],
@@ -552,40 +554,61 @@ class _TvEditServerScreenState extends ConsumerState<TvEditServerScreen> {
         ),
       );
 
+  /// 带标签的可聚焦输入行：标签在上，输入框聚焦时描边高亮（对齐移动端/添加页观感）。
   Widget _field(TvMetrics m, String label, TextEditingController ctrl,
       {TextInputType? keyboardType, ValueChanged<String>? onChanged}) {
-    return TextField(
-      controller: ctrl,
-      keyboardType: keyboardType,
-      onChanged: onChanged,
-      style: TextStyle(
-        fontSize: m.fontSizeMd,
-        color: TvDesignTokens.textPrimary,
-      ),
-      cursorColor: TvDesignTokens.brand,
-      decoration: InputDecoration(labelText: label),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: m.fontSizeSm,
+            color: TvDesignTokens.textSecondary,
+          ),
+        ),
+        SizedBox(height: m.spacingXs),
+        Focus(
+          child: Builder(
+            builder: (context) {
+              final focused = Focus.of(context).hasFocus;
+              return Container(
+                decoration: BoxDecoration(
+                  color: TvDesignTokens.surface,
+                  borderRadius: BorderRadius.circular(m.posterRadius),
+                  border: Border.all(
+                    color: focused
+                        ? TvDesignTokens.brand
+                        : TvDesignTokens.divider,
+                    width: focused ? 3 : 1.5,
+                  ),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: m.spacingMd),
+                child: TextField(
+                  controller: ctrl,
+                  keyboardType: keyboardType,
+                  onChanged: onChanged,
+                  style: TextStyle(
+                    fontSize: m.fontSizeMd,
+                    color: TvDesignTokens.textPrimary,
+                  ),
+                  cursorColor: TvDesignTokens.brand,
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding:
+                        EdgeInsets.symmetric(vertical: m.spacingMd),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
   Widget _dialogField(TvMetrics m, String label, TextEditingController ctrl,
       {TextInputType? keyboardType}) {
     return _field(m, label, ctrl, keyboardType: keyboardType);
-  }
-
-  Widget _pillButton(String text, Color bg, Color fg, TvMetrics m) {
-    return Container(
-      padding: EdgeInsets.all(m.spacingMd),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(m.posterRadius),
-      ),
-      child: Center(
-        child: Text(text,
-            style: TextStyle(
-                fontSize: m.fontSizeMd,
-                color: fg,
-                fontWeight: FontWeight.bold)),
-      ),
-    );
   }
 }

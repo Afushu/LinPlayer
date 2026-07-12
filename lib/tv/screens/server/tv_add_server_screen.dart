@@ -10,7 +10,6 @@ import '../../../core/providers/media_providers.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_button.dart';
-import '../../widgets/tv_focusable.dart';
 
 /// TV 添加服务器页 —— 真实连接 Emby（地址 + 账号 + 密码）。
 /// TV 上聚焦输入框即唤起系统输入法（leanback IME）。
@@ -180,27 +179,10 @@ class _TvAddServerScreenState extends ConsumerState<TvAddServerScreen> {
                       onPressed: _loading ? null : _connect,
                     ),
                     SizedBox(width: m.spacingMd),
-                    TvFocusable(
-                      padding: EdgeInsets.all(m.s(4)),
-                      onSelect: () => context.go('/tv/home'),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: m.spacingLg,
-                          vertical: m.spacingMd,
-                        ),
-                        decoration: BoxDecoration(
-                          color: TvDesignTokens.surface,
-                          borderRadius: BorderRadius.circular(
-                              m.posterRadius),
-                        ),
-                        child: Text(
-                          '取消',
-                          style: TextStyle(
-                            fontSize: m.fontSizeMd,
-                            color: TvDesignTokens.textPrimary,
-                          ),
-                        ),
-                      ),
+                    TvButton(
+                      text: '取消',
+                      outlined: true,
+                      onPressed: () => context.go('/tv/home'),
                     ),
                   ],
                 ),

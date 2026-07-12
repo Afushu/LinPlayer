@@ -6,17 +6,21 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../../ui/screens/home/home_screen.dart' show RandomRecommendationCarousel;
 import '../../../ui/utils/media_helpers.dart';
+import '../../../ui/widgets/common/dynamic_background.dart';
 import '../anirss/tv_anirss_view.dart';
 import '../source/tv_source_browse_screen.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_button.dart';
-import '../../widgets/tv_content_row.dart';
-import '../../widgets/tv_hero_banner.dart';
+import '../../widgets/tv_media_card.dart';
 
 /// TV 首页
-/// Hero Banner（每日推荐）+ 继续观看 + 媒体库，全部接入真实数据。
+///
+/// 观感对齐移动端：沉浸式 Hero 轮播（每日推荐，遥控器左右翻页 + 取色染背景）+
+/// 继续观看 + 媒体库 + 各库最新 + 合集，卡片全部复用移动端 MediaPoster/MediaImage，
+/// 交互换成焦点驱动。
 class TvHomeScreen extends ConsumerStatefulWidget {
   const TvHomeScreen({super.key});
 
@@ -25,7 +29,8 @@ class TvHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
-  bool _heroFocused = false;
+  /// Hero 取色 → 整页沉浸背景（对齐移动端）。默认深色。
+  Color _bgColor = const Color(0xFF121212);
 
   @override
   void initState() {
@@ -44,8 +49,6 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final m = context.tv;
-    // Hero 至少占首屏一半：以视口高度的 56% 作为目标高度。
-    final double heroHeight = MediaQuery.sizeOf(context).height * 0.56;
     final servers = ref.watch(serverListProvider);
     if (servers.isEmpty) {
       return _buildEmptyServers(m);
@@ -61,38 +64,31 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
     }
 
     final api = ref.read(apiClientProvider);
-    final recommendationsAsync = ref.watch(randomRecommendationsProvider);
     final resumeAsync = ref.watch(resumeItemsProvider);
     final librariesAsync = ref.watch(librariesProvider);
     final hideDaily = ref.watch(hideDailyRecommendationsProvider);
 
-    return Scaffold(
-      backgroundColor: TvDesignTokens.background,
-      body: Focus(
-        autofocus: true,
-        onKeyEvent: (node, event) => KeyEventResult.ignored,
-        child: SingleChildScrollView(
+    return DynamicBackground(
+      backgroundColor: _bgColor,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Hero Banner（每日推荐）—— 放大至首屏一半以上；可在外观设置里隐藏
-              if (!hideDaily) ...[
-                recommendationsAsync.when(
-                  data: (items) {
-                    final heroItems = _heroItems(api, items);
-                    if (heroItems.isEmpty) {
-                      return _heroPlaceholder(m, heroHeight);
+              // Hero 轮播（每日推荐）——复用移动端组件 + 遥控器方向键翻页 + 取色。
+              if (!hideDaily)
+                RandomRecommendationCarousel(
+                  dpadFocus: true,
+                  autofocus: true,
+                  onColorChanged: (c) {
+                    if (mounted && c != _bgColor) {
+                      setState(() => _bgColor = c);
                     }
-                    return Focus(
-                      onFocusChange: (f) => setState(() => _heroFocused = f),
-                      child: TvHeroBanner(items: heroItems, height: heroHeight),
-                    );
                   },
-                  loading: () => _heroPlaceholder(m, heroHeight),
-                  error: (_, __) => _heroPlaceholder(m, heroHeight),
                 ),
-                SizedBox(height: m.spacingLg),
-              ],
+              SizedBox(height: m.spacingMd),
+
               // 继续观看
               resumeAsync.when(
                 data: (items) {
@@ -100,38 +96,62 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
                       .where((i) => !(i.userData?.played ?? false))
                       .toList(growable: false);
                   if (visible.isEmpty) return const SizedBox.shrink();
-                  return TvContentRow(
+                  return TvRow(
                     title: '继续观看',
-                    items: _resumeCards(api, visible),
-                    autofocusFirstItem: !_heroFocused,
+                    rowHeight: m.posterHeight16_9 + m.s(80),
+                    cards: [
+                      for (final it in visible)
+                        TvLandscapeCard(
+                          imageUrl: _first(resolveMediaItemLandscapeImageUrls(
+                              api, it,
+                              maxWidth: 720)),
+                          title: _continueTitle(it),
+                          subtitle: _continueSubtitle(it),
+                          badge: _continueBadge(it),
+                          progress: it.progress,
+                          onSelect: () => context.push('/tv/detail/${_detailId(it)}'),
+                        ),
+                    ],
                   );
                 },
                 loading: () => _rowPlaceholder('继续观看', m),
                 error: (_, __) => const SizedBox.shrink(),
               ),
-              SizedBox(height: m.spacingLg),
+              SizedBox(height: m.spacingMd),
+
               // 媒体库快捷入口
               librariesAsync.when(
                 data: (libs) {
                   if (libs.isEmpty) return const SizedBox.shrink();
-                  return TvContentRow(
+                  return TvRow(
                     title: '媒体库',
-                    items: _libraryCards(api, libs),
+                    rowHeight: m.posterHeight16_9 + m.s(64),
                     onSeeAll: () => context.go('/tv/library'),
+                    cards: [
+                      for (final lib in libs)
+                        TvLandscapeCard(
+                          imageUrl: _first(
+                              resolveLibraryImageUrls(api, lib, maxWidth: 400)),
+                          title: lib.name,
+                          onSelect: () =>
+                              context.go('/tv/library?libraryId=${lib.id}'),
+                        ),
+                    ],
                   );
                 },
                 loading: () => _rowPlaceholder('媒体库', m),
                 error: (_, __) => const SizedBox.shrink(),
               ),
-              SizedBox(height: m.spacingLg),
-              // 各媒体库最新内容（对齐 PC 端首页布局）
+              SizedBox(height: m.spacingMd),
+
+              // 各媒体库最新内容（每库一行 2:3 海报）
               librariesAsync.when(
                 data: (libs) => Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (final lib in libs)
                       Padding(
-                        padding: EdgeInsets.only(bottom: m.spacingMd),
+                        padding: EdgeInsets.only(bottom: m.spacingSm),
                         child: _TvLibraryLatestRow(library: lib),
                       ),
                   ],
@@ -139,14 +159,23 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
                 loading: () => const SizedBox.shrink(),
                 error: (_, __) => const SizedBox.shrink(),
               ),
-              SizedBox(height: m.spacingLg),
+              SizedBox(height: m.spacingMd),
+
               // 合集（最底部）
               ref.watch(collectionsProvider).maybeWhen(
                     data: (cols) {
                       if (cols.isEmpty) return const SizedBox.shrink();
-                      return TvContentRow(
+                      return TvRow(
                         title: '合集',
-                        items: _collectionCards(api, cols),
+                        rowHeight: m.posterHeight2_3 + m.s(80),
+                        cards: [
+                          for (final c in cols)
+                            TvMediaCard(
+                              item: c,
+                              onSelect: () => context.go(
+                                  '/tv/library?libraryId=${c.id}&title=${Uri.encodeComponent(c.name)}'),
+                            ),
+                        ],
                       );
                     },
                     orElse: () => const SizedBox.shrink(),
@@ -159,89 +188,14 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
     );
   }
 
-  List<TvPosterCardData> _collectionCards(
-      ApiClientFactory api, List<MediaItem> cols) {
-    return cols.map((c) {
-      final urls = resolveMediaItemImageUrls(api, c, maxWidth: 400);
-      return TvPosterCardData(
-        imageUrl: urls.isNotEmpty ? urls.first : null,
-        title: c.name,
-        // 复用媒体库页展示合集成员；带 title 让标题正确显示。
-        onTap: () => context.go(
-            '/tv/library?libraryId=${c.id}&title=${Uri.encodeComponent(c.name)}'),
-      );
-    }).toList(growable: false);
-  }
+  // ============ 辅助 ============
 
-  // ============ 数据映射 ============
+  String? _first(List<String> urls) => urls.isNotEmpty ? urls.first : null;
 
-  List<TvHeroItem> _heroItems(ApiClientFactory api, List<MediaItem> items) {
-    final result = <TvHeroItem>[];
-    for (final it in items) {
-      final banner = resolveMediaItemBannerImageUrls(
-        api,
-        it,
-        maxWidth: 1600,
-        allowPosterFallback: true,
-      );
-      if (banner.isEmpty) continue;
-      final logo = (it.logoItemId != null && it.logoImageTag != null)
-          ? api.image
-              .getLogoImageUrl(it.logoItemId!, tag: it.logoImageTag, maxWidth: 280)
-          : null;
-      result.add(TvHeroItem(
-        imageUrl: banner.first,
-        logoUrl: logo,
-        title: it.name,
-        subtitle: _heroSubtitle(it),
-        tags: it.genres?.take(3).toList(growable: false),
-        onPlay: () => context.push('/tv/player?mediaId=${it.id}'),
-        onDetail: () => context.push('/tv/detail/${it.id}'),
-      ));
-      if (result.length >= 6) break;
-    }
-    return result;
-  }
-
-  List<TvPosterCardData> _resumeCards(
-      ApiClientFactory api, List<MediaItem> items) {
-    return items.map((it) {
-      final urls = resolveMediaItemLandscapeImageUrls(api, it, maxWidth: 720);
-      // 点击继续观看 → 进入详情页（剧集回到所属剧的详情，便于挑集/查看信息）。
-      final detailId =
-          (it.type == 'Episode' && (it.seriesId?.isNotEmpty ?? false))
-              ? it.seriesId!
-              : it.id;
-      return TvPosterCardData(
-        imageUrl: urls.isNotEmpty ? urls.first : null,
-        title: _continueTitle(it),
-        subtitle: _continueSubtitle(it),
-        nextEpisodeLabel: _continueBadge(it),
-        progress: it.progress,
-        onTap: () => context.push('/tv/detail/$detailId'),
-      );
-    }).toList(growable: false);
-  }
-
-  List<TvPosterCardData> _libraryCards(ApiClientFactory api, List<Library> libs) {
-    return libs.map((lib) {
-      final urls = resolveLibraryImageUrls(api, lib, maxWidth: 400);
-      return TvPosterCardData(
-        imageUrl: urls.isNotEmpty ? urls.first : null,
-        title: lib.name,
-        onTap: () => context.go('/tv/library?libraryId=${lib.id}'),
-      );
-    }).toList(growable: false);
-  }
-
-  String? _heroSubtitle(MediaItem it) {
-    final parts = <String>[];
-    if (it.productionYear != null) parts.add('${it.productionYear}');
-    if (it.communityRating != null) {
-      parts.add('★ ${it.communityRating!.toStringAsFixed(1)}');
-    }
-    return parts.isEmpty ? null : parts.join('  ·  ');
-  }
+  String _detailId(MediaItem it) =>
+      (it.type == 'Episode' && (it.seriesId?.isNotEmpty ?? false))
+          ? it.seriesId!
+          : it.id;
 
   String _continueTitle(MediaItem it) {
     if (it.type == 'Episode') {
@@ -260,7 +214,6 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
-  /// 继续观看卡片右上角的「SxEx」角标，保证季/集信息醒目可见。
   String? _continueBadge(MediaItem it) {
     if (it.type != 'Episode') return null;
     final s = it.parentIndexNumber;
@@ -273,22 +226,6 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
   }
 
   // ============ 占位 / 空态 ============
-
-  Widget _heroPlaceholder(TvMetrics m, double height) {
-    return Container(
-      height: height,
-      color: TvDesignTokens.surface,
-      alignment: Alignment.center,
-      child: Icon(
-        Icons.movie_outlined,
-        color: TvDesignTokens.textDisabled,
-        size: m.s(64),
-      ),
-    ).animate(onPlay: (c) => c.repeat()).shimmer(
-          duration: TvDesignTokens.shimmerDuration,
-          color: Colors.white10,
-        );
-  }
 
   Widget _rowPlaceholder(String title, TvMetrics m) {
     return Padding(
@@ -381,7 +318,7 @@ class _TvHomeScreenState extends ConsumerState<TvHomeScreen> {
   }
 }
 
-/// 单个媒体库的「最新内容」横向行（对齐 PC 端首页：每个媒体库一行最新条目）。
+/// 单个媒体库的「最新内容」横向行（每库一行 2:3 海报）。
 class _TvLibraryLatestRow extends ConsumerWidget {
   final Library library;
 
@@ -390,27 +327,22 @@ class _TvLibraryLatestRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final m = context.tv;
-    final api = ref.read(apiClientProvider);
     final latestAsync = ref.watch(latestItemsProvider(library.id));
 
     return latestAsync.when(
       data: (items) {
         if (items.isEmpty) return const SizedBox.shrink();
-        final cards = items.map((it) {
-          final urls = resolveMediaItemImageUrls(api, it, maxWidth: 360);
-          return TvPosterCardData(
-            imageUrl: urls.isNotEmpty ? urls.first : null,
-            title: it.name,
-            subtitle: it.productionYear != null ? '${it.productionYear}' : null,
-            width: m.posterWidth2_3,
-            height: m.posterHeight2_3,
-            onTap: () => context.push('/tv/detail/${it.id}'),
-          );
-        }).toList(growable: false);
-        return TvContentRow(
+        return TvRow(
           title: library.name,
-          items: cards,
+          rowHeight: m.posterHeight2_3 + m.s(80),
           onSeeAll: () => context.go('/tv/library?libraryId=${library.id}'),
+          cards: [
+            for (final it in items)
+              TvMediaCard(
+                item: it,
+                onSelect: () => context.push('/tv/detail/${it.id}'),
+              ),
+          ],
         );
       },
       loading: () => const SizedBox.shrink(),

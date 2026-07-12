@@ -46,13 +46,12 @@ class _TvOnboardingScreenState extends State<TvOnboardingScreen> {
   }
 
   void _finishOnboarding() {
-    // TODO: 保存 hasSeenOnboarding 到 shared_preferences
+    // ponytail: 引导页仅从设置里手动进入（无首启门控读取标志位），故无需持久化。
     TvToast.show(context, '欢迎使用 LinPlayer TV！');
     Navigator.pop(context);
   }
 
   void _skipOnboarding() {
-    // TODO: 保存 hasSeenOnboarding 到 shared_preferences
     Navigator.pop(context);
   }
 

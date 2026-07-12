@@ -8,17 +8,23 @@ import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../core/providers/episode_aggregation_provider.dart';
+import '../../../core/providers/download_providers.dart';
+import '../../../core/services/download/download_helper.dart';
 import '../../../core/services/preload_service.dart';
+import '../../../core/utils/color_extractor.dart';
 import '../../../ui/utils/media_helpers.dart';
+import '../../../ui/widgets/common/dynamic_background.dart';
 import '../../../ui/widgets/common/media_widgets.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_button.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 
-/// TV 详情页（剧/电影）—— 接入真实数据。
-/// Hero 背景 + 标题信息 + 操作按钮 + 季选择 + 集列表。
+/// TV 详情页（剧/电影）—— 观感对齐移动端：沉浸式 Hero 背景（海报取色染整页）+
+/// 返回/收藏/下载角标按钮 + 标题·评分·类型标签 + 播放/更多 + 季选择 + 选集 + 简介 +
+/// 版本信息。全部交互项走 [TvFocusable] 遥控器焦点驱动。
 class TvDetailScreen extends ConsumerStatefulWidget {
   final String? mediaId;
 
@@ -31,6 +37,11 @@ class TvDetailScreen extends ConsumerStatefulWidget {
 class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
   String? _selectedSeasonId;
   bool? _favoriteOverride; // 本地乐观状态
+  bool _downloadingSeries = false;
+
+  /// Hero 取色 → 整页沉浸背景（对齐移动端）。默认深色。
+  Color _bgColor = const Color(0xFF121212);
+  String? _colorFor; // 已取色的条目 id，防重复触发
 
   @override
   void initState() {
@@ -60,6 +71,20 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
     );
   }
 
+  /// 从横图取色染整页背景（每个条目只跑一次，异步回填）。
+  void _ensureColor(ApiClientFactory api, MediaItem item) {
+    if (_colorFor == item.id) return;
+    _colorFor = item.id;
+    final urls = resolveMediaItemLandscapeImageUrls(api, item, maxWidth: 640);
+    if (urls.isEmpty) return;
+    ColorExtractor.extractFromUrl(urls.first, brightness: Brightness.dark)
+        .then((c) {
+      if (mounted && c.background != _bgColor) {
+        setState(() => _bgColor = c.background);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final m = context.tv;
@@ -69,20 +94,24 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
     }
     final itemAsync = ref.watch(mediaItemProvider(id));
 
-    return Scaffold(
-      backgroundColor: TvDesignTokens.background,
-      body: itemAsync.when(
-        data: (item) => _buildContent(item, m),
-        loading: () => const Center(
-          child: AppLoadingIndicator(size: 48, color: TvDesignTokens.brand),
+    return DynamicBackground(
+      backgroundColor: _bgColor,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: itemAsync.when(
+          data: (item) => _buildContent(item, m),
+          loading: () => const Center(
+            child: AppLoadingIndicator(size: 48, color: TvDesignTokens.brand),
+          ),
+          error: (e, _) => _errorBody('加载详情失败：$e', m),
         ),
-        error: (e, _) => _errorBody('加载详情失败：$e', m),
       ),
     );
   }
 
   Widget _buildContent(MediaItem item, TvMetrics m) {
     final api = ref.read(apiClientProvider);
+    _ensureColor(api, item);
     final isSeries = item.type == 'Series';
 
     return SingleChildScrollView(
@@ -107,6 +136,8 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
                   SizedBox(height: m.spacingLg),
                   _buildSynopsis(item.overview!, m),
                 ],
+                // 电影：版本信息卡（复用移动端 MediaSourceInfoCard）。
+                if (!isSeries) _buildVersionInfo(item.id, m),
                 SizedBox(height: m.spacingXxl),
               ],
             ),
@@ -123,6 +154,8 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
         ? api.image
             .getLogoImageUrl(item.logoItemId!, tag: item.logoImageTag, maxWidth: 320)
         : null;
+    final fg = readableTextColorForBackground(_bgColor);
+    final favorited = _favoriteOverride ?? (item.userData?.isFavorite ?? false);
 
     return SizedBox(
       height: m.s(420),
@@ -139,6 +172,7 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
             )
           else
             const ColoredBox(color: TvDesignTokens.surfaceElevated),
+          // 底部渐变：让海报柔和融进沉浸背景色。
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -146,13 +180,54 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  TvDesignTokens.background.withValues(alpha: 0.8),
-                  TvDesignTokens.background,
+                  _bgColor.withValues(alpha: 0.55),
+                  _bgColor.withValues(alpha: 0.92),
+                  _bgColor,
                 ],
-                stops: const [0.4, 0.82, 1.0],
+                stops: const [0.35, 0.7, 0.88, 1.0],
               ),
             ),
           ),
+          // 左上角：返回
+          Positioned(
+            top: m.spacingMd,
+            left: m.spacingMd,
+            child: _circleButton(
+              icon: Icons.arrow_back,
+              onSelect: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/tv');
+                }
+              },
+              m: m,
+            ),
+          ),
+          // 右上角：收藏 + 下载（剧集为整剧下载）
+          Positioned(
+            top: m.spacingMd,
+            right: m.spacingMd,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _circleButton(
+                  icon: favorited ? Icons.favorite : Icons.favorite_border,
+                  iconColor: favorited ? const Color(0xFFFF6B6B) : Colors.white,
+                  onSelect: () => _toggleFavorite(item, favorited),
+                  m: m,
+                ),
+                SizedBox(width: m.spacingSm),
+                _circleButton(
+                  icon: Icons.download,
+                  busy: _downloadingSeries,
+                  onSelect: () => _onDownload(item),
+                  m: m,
+                ),
+              ],
+            ),
+          ),
+          // 标题 + 评分 + 类型标签
           Positioned(
             left: m.spacingXl,
             right: m.spacingXl,
@@ -166,40 +241,35 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
                       height: m.s(64),
                       fit: BoxFit.contain,
                       alignment: Alignment.centerLeft,
-                      errorBuilder: (_, __, ___) => _titleText(item.name, m))
+                      errorBuilder: (_, __, ___) => _titleText(item.name, m, fg))
                 else
-                  _titleText(item.name, m),
+                  _titleText(item.name, m, fg),
                 SizedBox(height: m.spacingSm),
                 Row(
                   children: [
                     if (item.communityRating != null) ...[
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: m.spacingSm, vertical: m.s(4)),
-                        decoration: BoxDecoration(
-                          color: TvDesignTokens.brand,
-                          borderRadius: BorderRadius.circular(m.s(4)),
-                        ),
-                        child: Text(
-                          '★ ${item.communityRating!.toStringAsFixed(1)}',
-                          style: TextStyle(
-                            fontSize: m.fontSizeSm,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
+                      RatingBadge(
+                          rating: item.communityRating, size: m.fs(16)),
                       SizedBox(width: m.spacingMd),
                     ],
                     Expanded(
-                      child: Text(
-                        _metaLine(item),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: m.fontSizeSm,
-                          color: TvDesignTokens.textSecondary,
-                        ),
+                      child: Wrap(
+                        spacing: m.spacingSm,
+                        runSpacing: m.spacingXs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (item.productionYear != null)
+                            Text(
+                              '${item.productionYear}',
+                              style: TextStyle(
+                                fontSize: m.fontSizeSm,
+                                color: fg.withValues(alpha: 0.85),
+                              ),
+                            ),
+                          ...?item.genres
+                              ?.take(4)
+                              .map((g) => TagBadge(text: g)),
+                        ],
                       ),
                     ),
                   ],
@@ -212,29 +282,54 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
     );
   }
 
-  Widget _titleText(String name, TvMetrics m) => Text(
+  /// Hero 角标圆形按钮（返回/收藏/下载），遥控器可聚焦。
+  Widget _circleButton({
+    required IconData icon,
+    required VoidCallback onSelect,
+    required TvMetrics m,
+    Color iconColor = Colors.white,
+    bool busy = false,
+  }) {
+    return TvFocusable(
+      onSelect: onSelect,
+      padding: EdgeInsets.all(m.spacingXs),
+      child: Container(
+        width: m.s(52),
+        height: m.s(52),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: busy
+            ? SizedBox(
+                width: m.s(22),
+                height: m.s(22),
+                child: const CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
+            : Icon(icon, color: iconColor, size: m.s(26)),
+      ),
+    );
+  }
+
+  Widget _titleText(String name, TvMetrics m, Color fg) => Text(
         name,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: m.fontSizeXxl,
-          color: TvDesignTokens.textPrimary,
-          fontWeight: FontWeight.bold,
+          color: fg,
+          fontWeight: FontWeight.w800,
+          shadows: [
+            Shadow(
+                blurRadius: 8,
+                color: Colors.black.withValues(alpha: 0.5)),
+          ],
         ),
       );
 
-  String _metaLine(MediaItem item) {
-    final parts = <String>[];
-    if (item.productionYear != null) parts.add('${item.productionYear}');
-    final genres = item.genres;
-    if (genres != null && genres.isNotEmpty) {
-      parts.addAll(genres.take(3));
-    }
-    return parts.join(' · ');
-  }
-
   Widget _buildActionButtons(MediaItem item, TvMetrics m) {
-    final favorited = _favoriteOverride ?? (item.userData?.isFavorite ?? false);
     final resumeTicks = item.userData?.playbackPositionTicks ?? 0;
     final hasResume =
         item.type != 'Series' && !(item.userData?.played ?? false) && resumeTicks > 0;
@@ -279,10 +374,10 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
         ),
         SizedBox(width: m.spacingMd),
         TvButton(
-          text: favorited ? '已收藏' : '收藏',
-          icon: favorited ? Icons.favorite : Icons.favorite_border,
+          text: '更多',
+          icon: Icons.more_horiz,
           outlined: true,
-          onPressed: () => _toggleFavorite(item, favorited),
+          onPressed: () => _showMoreMenu(item),
         ),
       ],
     );
@@ -336,6 +431,117 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
     }
   }
 
+  /// 下载：剧集整剧入队，电影单条入队；先过服务端下载权限。
+  Future<void> _onDownload(MediaItem item) async {
+    if (_downloadingSeries) return;
+    setState(() => _downloadingSeries = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      final allowedByPolicy =
+          await ref.read(downloadPermissionProvider.future);
+      if (!allowedByPolicy || !(item.canDownload ?? true)) {
+        if (mounted) TvToast.show(context, '当前服务器未开放下载权限');
+        return;
+      }
+      final manager = ref.read(downloadManagerProvider);
+      if (item.type == 'Series') {
+        final result = await startSeriesDownload(
+            api: api, manager: manager, series: item);
+        if (mounted) {
+          TvToast.show(
+              context,
+              result.queued > 0
+                  ? '已加入下载 ${result.queued} 集'
+                  : '全部 ${result.total} 集已在下载列表');
+        }
+      } else {
+        final task =
+            await startMediaDownload(api: api, manager: manager, item: item);
+        if (mounted) {
+          TvToast.show(context, task != null ? '已添加到下载队列' : '添加下载失败');
+        }
+      }
+    } catch (_) {
+      if (mounted) TvToast.show(context, '下载失败，请稍后重试');
+    } finally {
+      if (mounted) setState(() => _downloadingSeries = false);
+    }
+  }
+
+  /// 更多菜单：右侧滑入面板（下载 / 标记已看未看 / 搜索其他播放源）。
+  void _showMoreMenu(MediaItem item) {
+    final canDownload = item.canDownload ?? true;
+    final watched = item.userData?.played ?? false;
+    showDialog(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (ctx) => TvPanel(
+        title: '更多',
+        onClose: () => Navigator.pop(ctx),
+        children: [
+          TvPanelOption(
+            title: '下载',
+            leading: const Icon(Icons.download,
+                color: TvDesignTokens.textPrimary),
+            onTap: () {
+              Navigator.pop(ctx);
+              if (canDownload) {
+                _onDownload(item);
+              } else {
+                TvToast.show(context, '当前服务器未开放下载权限');
+              }
+            },
+          ),
+          TvPanelOption(
+            title: watched ? '标记为未观看' : '标记为已观看',
+            leading: const Icon(Icons.visibility,
+                color: TvDesignTokens.textPrimary),
+            onTap: () {
+              Navigator.pop(ctx);
+              _toggleWatched(item, watched);
+            },
+          ),
+          TvPanelOption(
+            title: '搜索其他播放源',
+            leading:
+                const Icon(Icons.search, color: TvDesignTokens.textPrimary),
+            onTap: () {
+              Navigator.pop(ctx);
+              context.push('/tv/search');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleWatched(MediaItem item, bool watched) async {
+    try {
+      final api = ref.read(apiClientProvider);
+      if (watched) {
+        await api.playback.reportPlaybackStopped(PlaybackStopInfo(
+          itemId: item.id,
+          mediaSourceId: '',
+          positionTicks: 0,
+        ));
+      } else {
+        await api.playback.reportPlaybackStart(PlaybackStartInfo(
+          itemId: item.id,
+          mediaSourceId: '',
+        ));
+        await api.playback.reportPlaybackStopped(PlaybackStopInfo(
+          itemId: item.id,
+          mediaSourceId: '',
+          positionTicks: item.runTimeTicks ?? 0,
+        ));
+      }
+      ref.invalidate(mediaItemProvider(item.id));
+      if (mounted) TvToast.show(context, watched ? '已标记未观看' : '已标记已观看');
+    } catch (_) {
+      if (mounted) TvToast.show(context, '操作失败');
+    }
+  }
+
   Widget _buildSynopsis(String overview, TvMetrics m) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,6 +563,31 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
             height: TvDesignTokens.lineHeightRelaxed,
           ),
         ),
+      ],
+    );
+  }
+
+  /// 电影版本信息：复用移动端 [MediaSourceInfoCard]（名称/视频/容器·大小·码率/音轨/字幕）。
+  Widget _buildVersionInfo(String itemId, TvMetrics m) {
+    final info = ref.watch(playbackInfoProvider(itemId)).valueOrNull;
+    if (info == null || info.mediaSources.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: m.spacingLg),
+        Text(
+          '版本信息',
+          style: TextStyle(
+            fontSize: m.fontSizeLg,
+            color: TvDesignTokens.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: m.spacingSm),
+        for (final source in info.mediaSources)
+          MediaSourceInfoCard(source: source),
       ],
     );
   }
@@ -479,7 +710,7 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '选择季',
+              '季度选择',
               style: TextStyle(
                 fontSize: m.fontSizeLg,
                 color: TvDesignTokens.textPrimary,
@@ -488,7 +719,7 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
             ),
             SizedBox(height: m.spacingSm),
             SizedBox(
-              height: m.s(150) * 1.5 + m.s(48),
+              height: m.s(150) * 1.5 + m.spacingMd,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: seasons.length,
@@ -517,29 +748,30 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
     );
   }
 
-  /// 季封面卡片（竖向 2:3 海报 + 季名「第N季」）。
+  /// 季封面卡片：2:3 海报 + 底部渐变叠季名（对齐移动端），选中时描品牌色边。
   Widget _buildSeasonCard(
       ApiClientFactory api, Season season, bool selected, TvMetrics m) {
     final double w = m.s(150);
     final double h = w * 1.5;
     final poster = _seasonImageUrl(api, season);
+    final label = season.name.trim().isNotEmpty
+        ? season.name
+        : 'S${season.indexNumber ?? ''}';
     return SizedBox(
       width: w,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: w,
-            height: h,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(m.posterRadius),
-              border: selected
-                  ? Border.all(color: TvDesignTokens.brand, width: m.s(3))
-                  : null,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: poster != null
+      height: h,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(m.posterRadius),
+          border: selected
+              ? Border.all(color: TvDesignTokens.brand, width: m.s(3))
+              : null,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            poster != null
                 ? MediaImage(
                     imageUrl: poster, width: w, height: h, fit: BoxFit.cover)
                 : const ColoredBox(
@@ -547,21 +779,34 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
                     child: Icon(Icons.video_library_outlined,
                         color: TvDesignTokens.textDisabled),
                   ),
-          ),
-          SizedBox(height: m.spacingXs),
-          Text(
-            season.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: m.fontSizeSm,
-              color:
-                  selected ? TvDesignTokens.brand : TvDesignTokens.textPrimary,
-              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: EdgeInsets.only(top: m.s(20), bottom: m.spacingXs),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black87],
+                  ),
+                ),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: m.fontSizeSm,
+                    color: selected ? TvDesignTokens.brand : Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -654,7 +899,7 @@ class _TvDetailScreenState extends ConsumerState<TvDetailScreen> {
                         padding: EdgeInsets.symmetric(
                             horizontal: m.s(8), vertical: m.s(2)),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
+                          color: Colors.black.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(m.s(4)),
                         ),
                         child: Text(
