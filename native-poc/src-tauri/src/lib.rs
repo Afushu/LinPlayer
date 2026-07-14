@@ -761,6 +761,15 @@ fn download_set_threads(state: State<'_, AppState>, threads: usize) {
     state.download.set_threads(threads);
 }
 
+// ---------- 付费(爱发电)命令 ----------
+/// 校验爱发电订单号(经已部署的 CF 代理,客户端不接触 afdian token)。软锁。
+#[tauri::command]
+async fn afdian_verify(
+    order_no: String,
+) -> Result<linplayer_core::sync::AfdianVerifyResult, String> {
+    Ok(linplayer_core::sync::afdian_verify(&order_no).await)
+}
+
 // ---------- 排行榜命令 ----------
 /// 当前构建可用的榜单分类(动漫需弹弹凭据、影视需 TMDB 密钥,均编译期注入)。
 #[tauri::command]
@@ -927,7 +936,8 @@ pub fn run() {
             get_proxy,
             set_proxy,
             ranking_categories,
-            ranking_fetch
+            ranking_fetch,
+            afdian_verify
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

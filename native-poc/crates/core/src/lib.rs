@@ -9,6 +9,7 @@ pub mod media;
 pub mod net;
 pub mod ranking;
 pub mod source;
+pub mod sync;
 
 pub use config::{Account, AppConfig, Prefs, ProxyConfig};
 pub use emby::{Item, LoginResult, PlaybackTarget, Session};
