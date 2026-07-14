@@ -1,0 +1,12 @@
+[package]
+name = "linplayer-core"
+version = "0.1.0"
+edition = "2021"
+description = "LinPlayer 平台无关核心:数据源/网络/配置(桌面+安卓复用)"
+
+# 注意:不依赖 tauri / windows-sys / 任何桌面专属 crate,保证能交叉编译成安卓 .so。
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json"] }
+dirs = "5"
