@@ -159,6 +159,21 @@ pub async fn items(
     fetch_items(http, s, &url).await
 }
 
+/// 跨服聚合搜索用:按关键词搜电影/剧集。
+pub async fn search(
+    http: &reqwest::Client,
+    s: &Session,
+    query: &str,
+) -> Result<Vec<Item>, String> {
+    let url = format!(
+        "{}/Users/{}/Items?searchTerm={}&IncludeItemTypes=Movie,Series&Recursive=true&Fields=PrimaryImageAspectRatio&Limit=50",
+        s.server,
+        s.user_id,
+        urlencoding::encode(query)
+    );
+    fetch_items(http, s, &url).await
+}
+
 async fn fetch_items(http: &reqwest::Client, s: &Session, url: &str) -> Result<Vec<Item>, String> {
     let resp = http
         .get(url)

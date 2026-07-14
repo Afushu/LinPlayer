@@ -103,6 +103,90 @@ fn current_session(state: State<'_, AppState>) -> Option<LoginResult> {
     })
 }
 
+#[derive(serde::Serialize)]
+struct ServerGroup {
+    server_id: String,
+    server_name: String,
+    items: Vec<Item>,
+}
+
+/// 跨所有已登录 Emby 服务器并行搜索,按服分组(单台失败隔离)。
+#[tauri::command]
+async fn aggregate_search(
+    state: State<'_, AppState>,
+    query: String,
+) -> Result<Vec<ServerGroup>, String> {
+    let (accounts, device_id) = {
+        let cfg = state.config.lock().unwrap();
+        (cfg.accounts.clone(), cfg.device_id.clone())
+    };
+    if query.trim().is_empty() || accounts.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut handles = Vec::new();
+    for a in accounts {
+        let http = state.http.clone();
+        let device_id = device_id.clone();
+        let query = query.clone();
+        handles.push(tauri::async_runtime::spawn(async move {
+            let s = Session {
+                server: a.server.clone(),
+                token: a.token.clone(),
+                user_id: a.user_id.clone(),
+                device_id,
+            };
+            let items = emby::search(&http, &s, &query)
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|i| i.type_ == "Movie" || i.type_ == "Series")
+                .collect::<Vec<_>>();
+            ServerGroup {
+                server_name: if a.user_name.is_empty() {
+                    a.server.clone()
+                } else {
+                    format!("{} @ {}", a.user_name, a.server)
+                },
+                server_id: a.server,
+                items,
+            }
+        }));
+    }
+    let mut groups = Vec::new();
+    for h in handles {
+        if let Ok(g) = h.await {
+            if !g.items.is_empty() {
+                groups.push(g);
+            }
+        }
+    }
+    Ok(groups)
+}
+
+/// 切换活跃 Emby 账号(聚合搜索点播其它服条目前调用)。
+#[tauri::command]
+fn set_active_server(state: State<'_, AppState>, server_id: String) -> Result<(), String> {
+    let (account, device_id) = {
+        let mut cfg = state.config.lock().unwrap();
+        let idx = cfg
+            .accounts
+            .iter()
+            .position(|a| a.server == server_id)
+            .ok_or("找不到该服务器账号")?;
+        cfg.active = Some(idx);
+        let a = cfg.accounts[idx].clone();
+        cfg.save();
+        (a, cfg.device_id.clone())
+    };
+    *state.session.lock().unwrap() = Some(Session {
+        server: account.server,
+        token: account.token,
+        user_id: account.user_id,
+        device_id,
+    });
+    Ok(())
+}
+
 #[tauri::command]
 async fn views(state: State<'_, AppState>) -> Result<Vec<Item>, String> {
     let s = session_of(&state)?;
@@ -485,6 +569,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             login,
             current_session,
+            aggregate_search,
+            set_active_server,
             views,
             list_items,
             image_url,

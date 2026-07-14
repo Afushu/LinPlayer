@@ -17,6 +17,7 @@ type Track = { kind: string; id: string; title: string; lang: string; selected: 
 type Prefs = { audio_lang: string | null; sub_lang: string | null; sub_enabled: boolean };
 type Crumb = { id: string; name: string };
 type SourceEntry = { id: string; name: string; is_dir: boolean; is_video: boolean; size: number | null; thumb_url: string | null };
+type ServerGroup = { server_id: string; server_name: string; items: Item[] };
 
 function fmt(t: number) {
   if (!isFinite(t) || t < 0) t = 0;
@@ -36,6 +37,11 @@ export default function App() {
 
   const [crumbs, setCrumbs] = useState<Crumb[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+
+  // 聚合搜索(跨所有已登录 Emby 服务器)+ 多账号
+  const [addingServer, setAddingServer] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchGroups, setSearchGroups] = useState<ServerGroup[] | null>(null);
 
   // 文件浏览型源(网盘)
   const [loginTab, setLoginTab] = useState<"emby" | "source">("emby");
@@ -79,7 +85,7 @@ export default function App() {
     setErr(""); setBusy(true);
     try {
       const r = await invoke<LoginResult>("login", { server, username, password });
-      setSession(r);
+      setSession(r); setAddingServer(false);
       const v = await invoke<Item[]>("views");
       setItems(v); setCrumbs([]);
     } catch (e) { setErr(String(e)); }
@@ -106,6 +112,24 @@ export default function App() {
       }
     } catch (e) { setErr(String(e)); }
     finally { setBusy(false); }
+  }
+
+  // ---------- 聚合搜索(跨服)----------
+  async function doAggSearch() {
+    const q = searchQuery.trim();
+    if (!q) { setSearchGroups(null); return; }
+    setBusy(true); setErr("");
+    try { setSearchGroups(await invoke<ServerGroup[]>("aggregate_search", { query: q })); }
+    catch (e) { setErr(String(e)); }
+    finally { setBusy(false); }
+  }
+
+  async function playAgg(g: ServerGroup, it: Item) {
+    setErr("");
+    try {
+      await invoke("set_active_server", { serverId: g.server_id }); // 切到该条目所在服
+      await playItem(it);
+    } catch (e) { setErr(String(e)); }
   }
 
   // ---------- 网盘源 ----------
@@ -207,7 +231,7 @@ export default function App() {
       : "";
 
   // ---------- 登录页 ----------
-  if (!session && !source) {
+  if ((!session && !source) || addingServer) {
     const isSrc = loginTab === "source";
     return (
       <div className="screen login">
@@ -241,6 +265,9 @@ export default function App() {
           <button disabled={busy} onClick={isSrc ? doSourceLogin : doLogin}>
             {busy ? "登录中…" : isSrc ? "连接网盘" : "登录 Emby"}
           </button>
+          {addingServer && (
+            <button className="ghost" onClick={() => setAddingServer(false)}>取消</button>
+          )}
           {err && <div className="err">{err}</div>}
         </div>
       </div>
@@ -330,29 +357,57 @@ export default function App() {
     <div className={`screen${playing ? " playing" : ""}`}>
       <div className="topbar">
         <div className="crumbs">
-          <span onClick={() => gotoCrumb(-1)}>{session?.user_name} 的媒体库</span>
-          {crumbs.map((c, i) => (
+          <span onClick={() => { setSearchGroups(null); gotoCrumb(-1); }}>{session?.user_name} 的媒体库</span>
+          {!searchGroups && crumbs.map((c, i) => (
             <span key={c.id}> / <b onClick={() => gotoCrumb(i)}>{c.name}</b></span>
           ))}
+          {searchGroups && <span> / 搜索「{searchQuery}」</span>}
         </div>
+        <input className="searchbox" placeholder="跨服搜索…" value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               onKeyDown={(e) => e.key === "Enter" && doAggSearch()} />
+        <button className="ghost" onClick={() => setAddingServer(true)}>＋服务器</button>
         {busy && <div className="spinner" />}
       </div>
-      <div className="grid">
-        {items.map((it) => (
-          <div key={it.id} className="card" onClick={() => (it.is_folder ? openFolder(it) : playItem(it))}>
-            <div className="poster">
-              {posterUrl(it)
-                ? <img src={posterUrl(it)} onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
-                : <div className="poster-fallback">{it.is_folder ? "📁" : "🎬"}</div>}
-              {!it.is_folder && it.resume_secs > 0 && it.runtime_secs > 0 && (
-                <div className="resume" style={{ width: `${Math.min(100, (it.resume_secs / it.runtime_secs) * 100)}%` }} />
-              )}
+
+      {searchGroups ? (
+        <div className="agg-wrap">
+          {!searchGroups.length && !busy && <div className="empty">没有找到结果</div>}
+          {searchGroups.map((g) => (
+            <div key={g.server_id} className="agg-group">
+              <div className="agg-server">{g.server_name} · {g.items.length}</div>
+              <div className="grid">
+                {g.items.map((it) => (
+                  <div key={g.server_id + it.id} className="card" onClick={() => playAgg(g, it)}>
+                    <div className="poster">
+                      <div className="poster-fallback">{it.type_ === "Series" ? "📺" : "🎬"}</div>
+                    </div>
+                    <div className="cap" title={it.name}>{it.name}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="cap" title={it.name}>{it.name}</div>
-          </div>
-        ))}
-        {!items.length && !busy && <div className="empty">这里没有内容</div>}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid">
+          {items.map((it) => (
+            <div key={it.id} className="card" onClick={() => (it.is_folder ? openFolder(it) : playItem(it))}>
+              <div className="poster">
+                {posterUrl(it)
+                  ? <img src={posterUrl(it)} onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                  : <div className="poster-fallback">{it.is_folder ? "📁" : "🎬"}</div>}
+                {!it.is_folder && it.resume_secs > 0 && it.runtime_secs > 0 && (
+                  <div className="resume" style={{ width: `${Math.min(100, (it.resume_secs / it.runtime_secs) * 100)}%` }} />
+                )}
+              </div>
+              <div className="cap" title={it.name}>{it.name}</div>
+            </div>
+          ))}
+          {!items.length && !busy && <div className="empty">这里没有内容</div>}
+        </div>
+      )}
+
       {err && <div className="toast">{err}</div>}
       {playerLayer}
     </div>
