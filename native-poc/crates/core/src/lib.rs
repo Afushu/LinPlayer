@@ -8,6 +8,7 @@ pub mod emby;
 pub mod http;
 pub mod media;
 pub mod net;
+pub mod plugins;
 pub mod ranking;
 pub mod secrets;
 pub mod source;

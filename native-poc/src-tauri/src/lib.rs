@@ -1,6 +1,8 @@
 mod mpv;
+mod plugins_host;
 
 use linplayer_core::config::{Account, AppConfig, DanmakuServer, Prefs};
+use linplayer_core::plugins::PluginManager;
 use linplayer_core::danmaku::{self, DanmakuAnime, DanmakuAuthType, DanmakuComment, DanmakuSourceConfig};
 use linplayer_core::emby::{self, Item, LoginResult, PlaybackTarget, Session};
 use linplayer_core::http;
@@ -14,9 +16,10 @@ use linplayer_core::source::{MediaSourceBackend, SourceEntry, SourceKind, Source
 use mpv::{Player, Status};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{Manager, State, WindowEvent};
+use tokio::sync::oneshot;
 
 struct AppState {
     http: reqwest::Client,
@@ -39,6 +42,15 @@ struct AppState {
     download: linplayer_core::download::DownloadManager,
     // 当前 Emby 播放的 Trakt scrobble 上下文(play 时抓取,stop 时用于收尾上报)。
     scrobble_ctx: Mutex<Option<emby::ScrobbleInfo>>,
+    // 插件管理器(setup 期建,持 AppHandle 的 host)。
+    plugins: OnceLock<Arc<PluginManager>>,
+    // 插件 ctx.ui 请求的待回表:id -> oneshot,前端 plugin_ui_respond 回填。
+    ui_pending: Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>,
+    ui_seq: AtomicU64,
+}
+
+fn plugins_mgr(state: &AppState) -> Result<Arc<PluginManager>, String> {
+    state.plugins.get().cloned().ok_or_else(|| "插件系统未就绪".to_string())
 }
 
 fn poclog(msg: &str) {
@@ -308,6 +320,17 @@ async fn play(
             }
         }
     }
+    // 派发 onPlay 给插件(eventListeners)。
+    if let Some(mgr) = state.plugins.get() {
+        let media = state
+            .scrobble_ctx
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|i| serde_json::json!({ "name": i.title, "type": i.media_type }))
+            .unwrap_or(serde_json::Value::Null);
+        mgr.fire_player_event("onPlay", media);
+    }
     poclog("load OK");
     Ok(resume_secs)
 }
@@ -365,6 +388,10 @@ async fn stop_playback(state: State<'_, AppState>, pos: f64) -> Result<(), Strin
         if let Err(e) = emby::report_stopped(&state.http, &s, &t, pos).await {
             poclog(&format!("report_stopped ERR: {e}"));
         }
+    }
+    // 派发 onPlayEnd 给插件(eventListeners,如 telegram-notify)。
+    if let Some(mgr) = state.plugins.get() {
+        mgr.fire_player_event("onPlayEnd", serde_json::json!({ "position": pos }));
     }
     Ok(())
 }
@@ -1071,6 +1098,75 @@ fn set_proxy(state: State<'_, AppState>, config: linplayer_core::ProxyConfig) ->
     Ok(())
 }
 
+// ---------- 插件命令 ----------
+#[tauri::command]
+fn plugin_list(state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
+    Ok(plugins_mgr(&state)?.list())
+}
+
+#[tauri::command]
+fn plugin_install(state: State<'_, AppState>, path: String) -> Result<serde_json::Value, String> {
+    plugins_mgr(&state)?.install_ipk(&path)
+}
+
+#[tauri::command]
+async fn plugin_enable(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    plugins_mgr(&state)?.enable(&id).await
+}
+
+#[tauri::command]
+async fn plugin_disable(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    plugins_mgr(&state)?.disable(&id).await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn plugin_uninstall(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    plugins_mgr(&state)?.uninstall(&id).await;
+    Ok(())
+}
+
+/// 触发某扩展的 handler(actions/settingsPages 的入口按钮等)。
+#[tauri::command]
+async fn plugin_trigger(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    type_id: String,
+    ext_id: String,
+    args: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let args = args.unwrap_or_else(|| serde_json::json!([]));
+    plugins_mgr(&state)?.trigger_extension(&plugin_id, &type_id, &ext_id, args).await
+}
+
+/// 触发扩展 data 里某具名字段的 handler(设置页的 load/submit)。
+#[tauri::command]
+async fn plugin_invoke_field(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    type_id: String,
+    ext_id: String,
+    field: String,
+    args: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let args = args.unwrap_or_else(|| serde_json::json!([]));
+    plugins_mgr(&state)?
+        .invoke_extension_field(&plugin_id, &type_id, &ext_id, &field, args)
+        .await
+}
+
+/// 取某类型全部扩展(前端渲染 homeStats/sidebarItems 等)。
+#[tauri::command]
+fn plugin_extensions(state: State<'_, AppState>, type_id: String) -> Result<Vec<serde_json::Value>, String> {
+    Ok(plugins_mgr(&state)?.extensions_by_type(&type_id))
+}
+
+/// 前端回填一次 ctx.ui 请求(showForm 的返回值等)。value=null 视为取消。
+#[tauri::command]
+fn plugin_ui_respond(state: State<'_, AppState>, id: u64, value: Option<serde_json::Value>) {
+    plugins_host::ui_respond(&state, id, value.unwrap_or(serde_json::Value::Null));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config = AppConfig::load();
@@ -1122,6 +1218,9 @@ pub fn run() {
             cf_proxy: Mutex::new(None),
             download,
             scrobble_ctx: Mutex::new(None),
+            plugins: OnceLock::new(),
+            ui_pending: Mutex::new(HashMap::new()),
+            ui_seq: AtomicU64::new(0),
         })
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window");
@@ -1159,6 +1258,17 @@ pub fn run() {
                     }
                 }
             });
+
+            // 插件系统:host 持 AppHandle 落平台能力;基目录用应用配置目录。
+            let base = app
+                .path()
+                .app_config_dir()
+                .unwrap_or_else(|_| std::env::temp_dir().join("LinPlayer"))
+                .join("plugins_root");
+            let host = plugins_host::make_host(app.handle().clone());
+            let mgr = PluginManager::new(base, host);
+            let _ = app.state::<AppState>().plugins.set(mgr.clone());
+            tauri::async_runtime::spawn(async move { mgr.init().await });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1219,7 +1329,16 @@ pub fn run() {
             bangumi_update_episode,
             bangumi_calendar,
             config_export_qr,
-            config_import_qr
+            config_import_qr,
+            plugin_list,
+            plugin_install,
+            plugin_enable,
+            plugin_disable,
+            plugin_uninstall,
+            plugin_trigger,
+            plugin_invoke_field,
+            plugin_extensions,
+            plugin_ui_respond
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

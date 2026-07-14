@@ -19,6 +19,10 @@ base64 = "0.22"
 urlencoding = "2"
 regex = "1"
 flate2 = "1"
+# 插件系统:QuickJS(纯 Rust 绑定,可交叉安卓)。futures=AsyncRuntime;macro=async_with!。
+# 不启 parallel:QuickJS runtime 本就单线程,每插件引擎钉在专用 worker 线程,不跨线程(见 worker.rs)。
+rquickjs = { version = "0.10", features = ["macro", "futures"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 # tokio 已由 reqwest 传递引入,这里直连是为了自持本地预取代理的 TcpListener/worker,不增体积。
 tokio = { version = "1", features = ["rt", "net", "io-util", "sync", "time", "macros", "fs"] }
 
