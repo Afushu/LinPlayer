@@ -215,6 +215,7 @@ export default function App() {
           {isSrc && (
             <select value={srcKind} onChange={(e) => setSrcKind(e.target.value)}>
               <option value="openlist">OpenList / AList</option>
+              <option value="anirss">Ani-rss</option>
             </select>
           )}
           <input placeholder={isSrc ? "服务器地址 http://ip:5244" : "服务器地址 http://ip:8096"}
