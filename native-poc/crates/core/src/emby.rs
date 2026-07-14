@@ -159,32 +159,49 @@ pub async fn items(
     fetch_items(http, s, &url).await
 }
 
-/// Trakt scrobble 所需的条目信息:媒体类型 + 外部 ID 映射 + 时长。
+/// 播放期同步所需的条目信息:Trakt(类型+外部ID+时长)+ Bangumi(标题/季/集/首播日)。
 #[derive(serde::Serialize, Clone)]
 pub struct ScrobbleInfo {
     pub media_type: String,     // "movie" | "episode"
-    pub ids: serde_json::Value, // {imdb, tmdb, tvdb}(小写键,Trakt 认这套)
+    pub ids: serde_json::Value, // {imdb, tmdb, tvdb}(Trakt;可能为空对象)
     pub runtime_secs: f64,
+    // Bangumi 反查用:剧集取剧名(SeriesName),电影取片名(Name)。
+    pub title: String,
+    pub original_title: Option<String>,
+    pub air_date: Option<String>, // PremiereDate
+    pub season: i64,              // ParentIndexNumber(电影=1)
+    pub episode: i64,             // IndexNumber(电影=1)
 }
 
-/// 取条目的 ProviderIds + 类型 + 时长,组装成 Trakt scrobble 用信息。
-/// 仅 Movie/Episode 返回 Some;其它类型(如 Series/文件夹)返回 None(不 scrobble)。
+impl ScrobbleInfo {
+    /// Trakt 是否可用(有至少一个外部 ID)。
+    pub fn has_trakt_ids(&self) -> bool {
+        self.ids.as_object().map(|o| !o.is_empty()).unwrap_or(false)
+    }
+}
+
+/// 取条目元数据,组装成播放期同步用信息。仅 Movie/Episode 返回 Some(其它类型不同步)。
 pub async fn fetch_scrobble_info(
     http: &reqwest::Client,
     s: &Session,
     item_id: &str,
 ) -> Option<ScrobbleInfo> {
-    let url = format!("{}/Users/{}/Items/{item_id}?Fields=ProviderIds", s.server, s.user_id);
+    let url = format!(
+        "{}/Users/{}/Items/{item_id}?Fields=ProviderIds,PremiereDate,OriginalTitle",
+        s.server, s.user_id
+    );
     let resp = http.get(&url).header("X-Emby-Token", &s.token).send().await.ok()?;
     if !resp.status().is_success() {
         return None;
     }
     let j: serde_json::Value = resp.json().await.ok()?;
-    let media_type = match j["Type"].as_str()? {
+    let raw_type = j["Type"].as_str()?;
+    let media_type = match raw_type {
         "Movie" => "movie",
         "Episode" => "episode",
         _ => return None,
     };
+    let is_episode = raw_type == "Episode";
     // ProviderIds 键名大小写不一(Imdb/Tmdb/Tvdb),归一小写;tmdb/tvdb 转数字(Trakt 要 int)。
     let mut ids = serde_json::Map::new();
     if let Some(obj) = j["ProviderIds"].as_object() {
@@ -204,11 +221,23 @@ pub async fn fetch_scrobble_info(
             }
         }
     }
-    if ids.is_empty() {
-        return None; // 无任何外部 ID,Trakt 无法定位,跳过
+    // 剧集用剧名(SeriesName)反查 Bangumi 本体,电影用片名。
+    let title = if is_episode {
+        j["SeriesName"].as_str().unwrap_or("")
+    } else {
+        j["Name"].as_str().unwrap_or("")
     }
-    let runtime_secs = j["RunTimeTicks"].as_i64().unwrap_or(0) as f64 / 1e7;
-    Some(ScrobbleInfo { media_type: media_type.to_string(), ids: serde_json::Value::Object(ids), runtime_secs })
+    .to_string();
+    Some(ScrobbleInfo {
+        media_type: media_type.to_string(),
+        ids: serde_json::Value::Object(ids),
+        runtime_secs: j["RunTimeTicks"].as_i64().unwrap_or(0) as f64 / 1e7,
+        title,
+        original_title: j["OriginalTitle"].as_str().filter(|s| !s.is_empty()).map(String::from),
+        air_date: j["PremiereDate"].as_str().filter(|s| !s.is_empty()).map(String::from),
+        season: if is_episode { j["ParentIndexNumber"].as_i64().unwrap_or(1) } else { 1 },
+        episode: if is_episode { j["IndexNumber"].as_i64().unwrap_or(1) } else { 1 },
+    })
 }
 
 /// 跨服聚合搜索用:按关键词搜电影/剧集。

@@ -28,6 +28,36 @@ pub fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (if m <= 2 { y + 1 } else { y }, m as u32, d as u32)
 }
 
+/// (年,月,日) → epoch 天数。Howard Hinnant days_from_civil(civil_from_days 的逆),日期差用。
+pub fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400; // [0, 399]
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1; // [0, 365]
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
+    era * 146097 + doe - 719468
+}
+
+/// 解析日期串(取首个 YYYY-MM-DD)→ epoch 天数。失败 None。
+pub fn parse_date_to_days(s: &str) -> Option<i64> {
+    let bytes = s.as_bytes();
+    // 找 4 位年-月-日 的起点(宽松:任意位置的 \d{4}-\d{1,2}-\d{1,2})。
+    let parts: Vec<&str> = s.splitn(2, |c: char| c == 'T' || c == ' ').collect();
+    let date_part = parts.first()?;
+    let seg: Vec<&str> = date_part.split('-').collect();
+    if seg.len() < 3 {
+        return None;
+    }
+    let _ = bytes;
+    let y = seg[0].trim().parse::<i64>().ok()?;
+    let m = seg[1].trim().parse::<i64>().ok()?;
+    let d = seg[2].trim().parse::<i64>().ok()?;
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    Some(days_from_civil(y, m, d))
+}
+
 /// 从当前时间偏移若干天,格式化成 YYYY-MM-DD(Trakt 日历起点用)。
 pub fn date_str_days_ago(offset_days: i64) -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -46,5 +76,19 @@ mod tests {
         assert_eq!(civil_from_days(0), (1970, 1, 1)); // unix epoch
         assert_eq!(civil_from_days(18262), (2020, 1, 1)); // 2020-01-01
         assert_eq!(civil_from_days(-1), (1969, 12, 31));
+    }
+
+    #[test]
+    fn days_roundtrip_and_diff() {
+        // civil→days→civil 往返一致。
+        for &(y, m, d) in &[(1970, 1, 1), (2020, 1, 1), (2024, 2, 29), (1999, 12, 31)] {
+            let days = days_from_civil(y, m, d);
+            assert_eq!(civil_from_days(days), (y, m as u32, d as u32));
+        }
+        // 日期差(天)。
+        let a = parse_date_to_days("2020-01-01").unwrap();
+        let b = parse_date_to_days("2020-01-11T00:00:00").unwrap();
+        assert_eq!((a - b).abs(), 10);
+        assert!(parse_date_to_days("garbage").is_none());
     }
 }

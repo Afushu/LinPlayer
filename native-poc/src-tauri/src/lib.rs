@@ -284,21 +284,28 @@ async fn play(
     }
     *state.playback.lock().unwrap() = Some(target);
 
-    // Trakt 自动 scrobble:已连接则抓 ProviderIds 上报「开始观看」,存上下文供 stop 收尾。
+    // 播放期同步:Trakt/Bangumi 任一连接就抓元数据,存上下文供 stop 收尾。
     *state.scrobble_ctx.lock().unwrap() = None;
-    let trakt_acc = state.config.lock().unwrap().sync_trakt.clone();
-    if let Some(acc) = trakt_acc {
+    let (trakt_acc, bangumi_on) = {
+        let cfg = state.config.lock().unwrap();
+        (cfg.sync_trakt.clone(), cfg.sync_bangumi.is_some())
+    };
+    if trakt_acc.is_some() || bangumi_on {
         if let Some(info) = emby::fetch_scrobble_info(&state.http, &s, &item_id).await {
-            let progress = if info.runtime_secs > 0.0 {
-                (resume_secs / info.runtime_secs * 100.0).clamp(0.0, 100.0)
-            } else {
-                0.0
-            };
             *state.scrobble_ctx.lock().unwrap() = Some(info.clone());
-            // 不阻塞播放:后台上报 start(Trakt 慢/失败都不影响起播)。
-            tauri::async_runtime::spawn(async move {
-                trakt::scrobble(&acc, &info.media_type, info.ids, progress, "start").await;
-            });
+            // Trakt 有外部 ID 才上报 start(后台,不阻塞起播)。
+            if let Some(acc) = trakt_acc {
+                if info.has_trakt_ids() {
+                    let progress = if info.runtime_secs > 0.0 {
+                        (resume_secs / info.runtime_secs * 100.0).clamp(0.0, 100.0)
+                    } else {
+                        0.0
+                    };
+                    tauri::async_runtime::spawn(async move {
+                        trakt::scrobble(&acc, &info.media_type, info.ids, progress, "start").await;
+                    });
+                }
+            }
         }
     }
     poclog("load OK");
@@ -327,16 +334,30 @@ async fn stop_playback(state: State<'_, AppState>, pos: f64) -> Result<(), Strin
     *state.source_play_entry.lock().unwrap() = None; // 退出播放,停止 302 看门狗
     *state.prefetch.lock().unwrap() = None; // 停预取代理(Drop 关服)
 
-    // Trakt scrobble stop:按最终进度收尾(Trakt 在 ≥80% 时自动标记看过并写历史)。
+    // 播放期同步收尾:按最终进度上报。
     let ctx = state.scrobble_ctx.lock().unwrap().take();
-    let trakt_acc = state.config.lock().unwrap().sync_trakt.clone();
-    if let (Some(info), Some(acc)) = (ctx, trakt_acc) {
+    let (trakt_acc, bangumi_acc) = {
+        let cfg = state.config.lock().unwrap();
+        (cfg.sync_trakt.clone(), cfg.sync_bangumi.clone())
+    };
+    if let Some(info) = ctx {
         let progress = if info.runtime_secs > 0.0 {
             (pos / info.runtime_secs * 100.0).clamp(0.0, 100.0)
         } else {
             0.0
         };
-        trakt::scrobble(&acc, &info.media_type, info.ids, progress, "stop").await;
+        // Trakt:stop 上报(Trakt 在 ≥80% 时自动标记看过并写历史)。
+        if let Some(acc) = trakt_acc {
+            if info.has_trakt_ids() {
+                trakt::scrobble(&acc, &info.media_type, info.ids.clone(), progress, "stop").await;
+            }
+        }
+        // Bangumi:看过阈值(≥80%)才反查标记(反查耗多次 API,不到阈值不触发)。
+        if let Some(acc) = bangumi_acc {
+            if progress >= 80.0 && !info.title.is_empty() {
+                mark_bangumi_watched(&acc, &info).await;
+            }
+        }
     }
 
     let target = state.playback.lock().unwrap().take();
@@ -884,6 +905,28 @@ async fn trakt_calendar(
 
 // ---------- Bangumi 同步命令 ----------
 use linplayer_core::sync::bangumi;
+use linplayer_core::sync::bangumi_matcher;
+
+/// 播放看完(≥80%)自动标 Bangumi:反查 subject/episode → 收藏为「在看」→ 单集标「看过」。
+/// 反查失败(非番剧/搜不到)静默跳过。更新单集前必须先收藏,否则未收藏的番更新会失败。
+async fn mark_bangumi_watched(acc: &linplayer_core::sync::SyncAccount, info: &emby::ScrobbleInfo) {
+    let matched = if info.media_type == "movie" {
+        bangumi_matcher::resolve_movie(&info.title, info.original_title.as_deref(), info.air_date.as_deref()).await
+    } else {
+        bangumi_matcher::resolve_episode(
+            &info.title,
+            info.original_title.as_deref(),
+            info.air_date.as_deref(),
+            info.season,
+            info.episode,
+        )
+        .await
+    };
+    let Some(r) = matched else { return };
+    // 先确保条目已收藏(3=在看),再标单集看过(2)。
+    bangumi::set_collection_type(acc, r.subject_id, 3).await;
+    bangumi::update_episode_status(acc, r.subject_id, r.episode_id, 2).await;
+}
 
 /// 构造 Bangumi 授权页 URL(前端用浏览器打开,用户授权后粘贴 code 回来)。
 #[tauri::command]
