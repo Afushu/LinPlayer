@@ -16,6 +16,7 @@ type Status = { time: number; duration: number; paused: boolean; buffered: numbe
 type Track = { kind: string; id: string; title: string; lang: string; selected: boolean };
 type Prefs = { audio_lang: string | null; sub_lang: string | null; sub_enabled: boolean };
 type Crumb = { id: string; name: string };
+type SourceEntry = { id: string; name: string; is_dir: boolean; is_video: boolean; size: number | null; thumb_url: string | null };
 
 function fmt(t: number) {
   if (!isFinite(t) || t < 0) t = 0;
@@ -35,6 +36,13 @@ export default function App() {
 
   const [crumbs, setCrumbs] = useState<Crumb[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+
+  // 文件浏览型源(网盘)
+  const [loginTab, setLoginTab] = useState<"emby" | "source">("emby");
+  const [srcKind, setSrcKind] = useState("openlist");
+  const [source, setSource] = useState<{ kind: string } | null>(null);
+  const [srcItems, setSrcItems] = useState<SourceEntry[]>([]);
+  const [srcCrumbs, setSrcCrumbs] = useState<Crumb[]>([]);
 
   const [playing, setPlaying] = useState<Item | null>(null);
   const [status, setStatus] = useState<Status>({ time: 0, duration: 0, paused: false, buffered: 0 });
@@ -99,6 +107,50 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  // ---------- 网盘源 ----------
+  async function doSourceLogin() {
+    setErr(""); setBusy(true);
+    try {
+      await invoke("source_login", { kind: srcKind, baseUrl: server, username, password });
+      setSource({ kind: srcKind });
+      setSrcItems(await invoke<SourceEntry[]>("source_list_dir", { dirId: null }));
+      setSrcCrumbs([]);
+    } catch (e) { setErr(String(e)); }
+    finally { setBusy(false); }
+  }
+
+  async function openSrcDir(e: SourceEntry) {
+    setBusy(true); setErr("");
+    try {
+      setSrcItems(await invoke<SourceEntry[]>("source_list_dir", { dirId: e.id }));
+      setSrcCrumbs((c) => [...c, { id: e.id, name: e.name }]);
+    } catch (er) { setErr(String(er)); }
+    finally { setBusy(false); }
+  }
+
+  async function gotoSrcCrumb(idx: number) {
+    setBusy(true);
+    try {
+      const dirId = idx < 0 ? null : srcCrumbs[idx].id;
+      setSrcItems(await invoke<SourceEntry[]>("source_list_dir", { dirId }));
+      setSrcCrumbs(idx < 0 ? [] : srcCrumbs.slice(0, idx + 1));
+    } catch (er) { setErr(String(er)); }
+    finally { setBusy(false); }
+  }
+
+  async function playSrc(e: SourceEntry) {
+    setErr("");
+    try {
+      const resume = await invoke<number>("source_play", { entryId: e.id, entryName: e.name, resumeSecs: 0 });
+      setPlaying({ id: e.id, name: e.name, type_: "", is_folder: false, has_primary: false, runtime_secs: 0, resume_secs: 0 });
+      setStatus({ time: resume, duration: 0, paused: false, buffered: 0 });
+      setTimeout(async () => {
+        try { await invoke("apply_prefs"); } catch {}
+        setTracks(await invoke<Track[]>("tracks"));
+      }, 1200);
+    } catch (er) { setErr(String(er)); }
+  }
+
   async function playItem(it: Item) {
     setErr("");
     try {
@@ -149,17 +201,30 @@ export default function App() {
       : "";
 
   // ---------- 登录页 ----------
-  if (!session) {
+  if (!session && !source) {
+    const isSrc = loginTab === "source";
     return (
       <div className="screen login">
         <div className="login-card">
           <div className="brand">LinPlayer <span>PoC</span></div>
           <div className="sub">Rust 核 · Tauri 壳 · 原生 mpv</div>
-          <input placeholder="服务器地址 http://ip:8096" value={server} onChange={(e) => setServer(e.target.value)} />
+          <div className="tabs">
+            <button className={!isSrc ? "on" : ""} onClick={() => setLoginTab("emby")}>Emby</button>
+            <button className={isSrc ? "on" : ""} onClick={() => setLoginTab("source")}>网盘</button>
+          </div>
+          {isSrc && (
+            <select value={srcKind} onChange={(e) => setSrcKind(e.target.value)}>
+              <option value="openlist">OpenList / AList</option>
+            </select>
+          )}
+          <input placeholder={isSrc ? "服务器地址 http://ip:5244" : "服务器地址 http://ip:8096"}
+                 value={server} onChange={(e) => setServer(e.target.value)} />
           <input placeholder="用户名" value={username} onChange={(e) => setUsername(e.target.value)} />
           <input placeholder="密码" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                 onKeyDown={(e) => e.key === "Enter" && doLogin()} />
-          <button disabled={busy} onClick={doLogin}>{busy ? "登录中…" : "登录 Emby"}</button>
+                 onKeyDown={(e) => e.key === "Enter" && (isSrc ? doSourceLogin() : doLogin())} />
+          <button disabled={busy} onClick={isSrc ? doSourceLogin : doLogin}>
+            {busy ? "登录中…" : isSrc ? "连接网盘" : "登录 Emby"}
+          </button>
           {err && <div className="err">{err}</div>}
         </div>
       </div>
@@ -170,18 +235,92 @@ export default function App() {
   const audio = tracks.filter((t) => t.kind === "audio");
   const subs = tracks.filter((t) => t.kind === "sub");
 
+  // 播放层(透明,露出底下 mpv)—— Emby 与网盘源共用
+  const playerLayer = playing && (
+    <div className="player-layer">
+      <div className="p-top">
+        <span className="p-title">{playing.name}</span>
+        <button className="p-close" onClick={closePlayer}>✕</button>
+      </div>
+      <div className="p-controls">
+        <button className="p-play" onClick={togglePause}>{status.paused ? "▶" : "⏸"}</button>
+        <span className="p-time">{fmt(seeking ?? status.time)}</span>
+        <input
+          className="p-seek" type="range" min={0} max={Math.max(1, status.duration)} step={0.5}
+          value={seeking ?? status.time}
+          onChange={(e) => setSeeking(Number(e.target.value))}
+          onMouseUp={async () => { if (seeking != null) { await invoke("seek", { pos: seeking }); setSeeking(null); } }}
+        />
+        <span className="p-time">{fmt(status.duration)}</span>
+        {audio.length > 1 && (
+          <select onChange={(e) => {
+                    const id = e.target.value;
+                    invoke("set_track", { kind: "audio", id });
+                    persistPrefs({ ...prefs, audio_lang: trackLang(audio, id) || prefs.audio_lang });
+                  }}
+                  defaultValue={audio.find((t) => t.selected)?.id}>
+            {audio.map((t) => <option key={t.id} value={t.id}>音轨 {t.id} {t.lang || t.title}</option>)}
+          </select>
+        )}
+        <select onChange={(e) => {
+                  const id = e.target.value;
+                  invoke("set_track", { kind: "sub", id });
+                  if (id === "no") persistPrefs({ ...prefs, sub_enabled: false });
+                  else persistPrefs({ ...prefs, sub_enabled: true, sub_lang: trackLang(subs, id) || prefs.sub_lang });
+                }}
+                defaultValue={subs.find((t) => t.selected)?.id ?? "no"}>
+          <option value="no">字幕关</option>
+          {subs.map((t) => <option key={t.id} value={t.id}>字幕 {t.id} {t.lang || t.title}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+
+  // 网盘源浏览页
+  if (source) {
+    return (
+      <div className={`screen${playing ? " playing" : ""}`}>
+        <div className="topbar">
+          <div className="crumbs">
+            <span onClick={() => gotoSrcCrumb(-1)}>网盘根目录</span>
+            {srcCrumbs.map((c, i) => (
+              <span key={c.id + i}> / <b onClick={() => gotoSrcCrumb(i)}>{c.name}</b></span>
+            ))}
+          </div>
+          {busy && <div className="spinner" />}
+        </div>
+        <div className="grid">
+          {srcItems.map((e) => (
+            <div key={e.id} className="card"
+                 onClick={() => (e.is_dir ? openSrcDir(e) : e.is_video ? playSrc(e) : undefined)}>
+              <div className="poster">
+                {e.thumb_url
+                  ? <img src={e.thumb_url} onError={(ev) => ((ev.target as HTMLImageElement).style.display = "none")} />
+                  : <div className="poster-fallback">{e.is_dir ? "📁" : e.is_video ? "🎬" : "📄"}</div>}
+              </div>
+              <div className="cap" title={e.name}>{e.name}</div>
+            </div>
+          ))}
+          {!srcItems.length && !busy && <div className="empty">这里没有内容</div>}
+        </div>
+        {err && <div className="toast">{err}</div>}
+        {playerLayer}
+      </div>
+    );
+  }
+
+  // Emby 浏览页
   return (
     <div className={`screen${playing ? " playing" : ""}`}>
       <div className="topbar">
         <div className="crumbs">
-          <span onClick={() => gotoCrumb(-1)}>{session.user_name} 的媒体库</span>
+          <span onClick={() => gotoCrumb(-1)}>{session?.user_name} 的媒体库</span>
           {crumbs.map((c, i) => (
             <span key={c.id}> / <b onClick={() => gotoCrumb(i)}>{c.name}</b></span>
           ))}
         </div>
         {busy && <div className="spinner" />}
       </div>
-
       <div className="grid">
         {items.map((it) => (
           <div key={it.id} className="card" onClick={() => (it.is_folder ? openFolder(it) : playItem(it))}>
@@ -198,51 +337,8 @@ export default function App() {
         ))}
         {!items.length && !busy && <div className="empty">这里没有内容</div>}
       </div>
-
       {err && <div className="toast">{err}</div>}
-
-      {/* ---------- 播放层(透明,露出底下 mpv)---------- */}
-      {playing && (
-        <div className="player-layer">
-          <div className="p-top">
-            <span className="p-title">{playing.name}</span>
-            <button className="p-close" onClick={closePlayer}>✕</button>
-          </div>
-
-          <div className="p-controls">
-            <button className="p-play" onClick={togglePause}>{status.paused ? "▶" : "⏸"}</button>
-            <span className="p-time">{fmt(seeking ?? status.time)}</span>
-            <input
-              className="p-seek" type="range" min={0} max={Math.max(1, status.duration)} step={0.5}
-              value={seeking ?? status.time}
-              onChange={(e) => setSeeking(Number(e.target.value))}
-              onMouseUp={async () => { if (seeking != null) { await invoke("seek", { pos: seeking }); setSeeking(null); } }}
-            />
-            <span className="p-time">{fmt(status.duration)}</span>
-
-            {audio.length > 1 && (
-              <select onChange={(e) => {
-                        const id = e.target.value;
-                        invoke("set_track", { kind: "audio", id });
-                        persistPrefs({ ...prefs, audio_lang: trackLang(audio, id) || prefs.audio_lang });
-                      }}
-                      defaultValue={audio.find((t) => t.selected)?.id}>
-                {audio.map((t) => <option key={t.id} value={t.id}>音轨 {t.id} {t.lang || t.title}</option>)}
-              </select>
-            )}
-            <select onChange={(e) => {
-                      const id = e.target.value;
-                      invoke("set_track", { kind: "sub", id });
-                      if (id === "no") persistPrefs({ ...prefs, sub_enabled: false });
-                      else persistPrefs({ ...prefs, sub_enabled: true, sub_lang: trackLang(subs, id) || prefs.sub_lang });
-                    }}
-                    defaultValue={subs.find((t) => t.selected)?.id ?? "no"}>
-              <option value="no">字幕关</option>
-              {subs.map((t) => <option key={t.id} value={t.id}>字幕 {t.id} {t.lang || t.title}</option>)}
-            </select>
-          </div>
-        </div>
-      )}
+      {playerLayer}
     </div>
   );
 }

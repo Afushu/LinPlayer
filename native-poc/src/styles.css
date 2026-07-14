@@ -29,11 +29,19 @@ html, body, #root { height: 100%; background: transparent; }
 .brand { font-size: 26px; font-weight: 700; letter-spacing: .5px; }
 .brand span { color: var(--accent); }
 .sub { font-size: 12px; opacity: .55; margin-bottom: 10px; }
-.login-card input, .p-controls select, .login-card button {
+.login-card input, .login-card select, .p-controls select, .login-card button {
   height: 42px; border-radius: 10px; border: 1px solid rgba(255,255,255,.1);
   background: rgba(255,255,255,.05); color: #fff; padding: 0 14px; font-size: 14px;
   outline: none; transition: border-color .2s, background .2s;
 }
+.login-card select { cursor: pointer; }
+/* Emby / 网盘 分页 */
+.tabs { display: flex; gap: 8px; }
+.tabs button {
+  flex: 1; height: 36px; border-radius: 9px; cursor: pointer; font-size: 13px;
+  border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05); color: #cfd4e2;
+}
+.tabs button.on { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
 .login-card input:focus { border-color: var(--accent); background: rgba(79,124,255,.08); }
 .login-card button {
   background: linear-gradient(135deg, #4f7cff, #6b5cff); border: none; font-weight: 600;

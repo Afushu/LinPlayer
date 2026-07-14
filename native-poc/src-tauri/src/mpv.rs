@@ -4,6 +4,7 @@
 #![allow(non_camel_case_types)]
 
 use linplayer_core::media::Track;
+use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::sync::Once;
 
@@ -187,6 +188,26 @@ impl Player {
             &if start_secs > 1.0 { start_secs.to_string() } else { "none".to_string() },
         );
         self.cmd(&["loadfile", url])
+    }
+    /// 带逐流 HTTP headers / UA 加载(网盘直链取流用:Authorization/Cookie/Referer)。
+    // ponytail: http-header-fields 用逗号分隔 "Key: Value";含逗号的值会串味,当前源(OpenList Authorization)不涉及,够用。
+    pub fn load_with_headers(
+        &self,
+        url: &str,
+        start_secs: f64,
+        headers: &HashMap<String, String>,
+        user_agent: Option<&str>,
+    ) -> Result<(), String> {
+        let joined = headers
+            .iter()
+            .map(|(k, v)| format!("{k}: {v}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        self.set_str("http-header-fields", &joined);
+        if let Some(ua) = user_agent {
+            self.set_str("user-agent", ua);
+        }
+        self.load_at(url, start_secs)
     }
     pub fn set_pause(&self, paused: bool) {
         self.set_str("pause", if paused { "yes" } else { "no" });
