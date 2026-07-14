@@ -4,7 +4,9 @@ pub mod config;
 pub mod emby;
 pub mod http;
 pub mod media;
+pub mod source;
 
 pub use config::{Account, AppConfig, Prefs};
 pub use emby::{Item, LoginResult, PlaybackTarget, Session};
 pub use media::Track;
+pub use source::{MediaSourceBackend, SourceEntry, SourceKind, SourceServer};
