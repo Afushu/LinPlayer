@@ -34,6 +34,77 @@ pub struct DanmakuServer {
     pub token: String,
 }
 
+/// 用户自定义代理(三端通用)。type 为 none 时不启用。
+/// HTTP/HTTPS 走 CONNECT 隧道;SOCKS5 依赖 reqwest "socks" 特性。
+/// ⚠️ libmpv 仅支持 HTTP 代理(http-proxy),SOCKS 只对 API/图片/字幕/下载生效。
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct ProxyConfig {
+    #[serde(rename = "type")]
+    pub type_: String, // none | http | https | socks5 | socks4
+    pub host: String,
+    pub port: u16,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+    /// 是否让媒体流(mpv 播放)也走代理(仅 HTTP 系列有效)。
+    #[serde(default = "default_true")]
+    pub proxy_media: bool,
+}
+fn default_true() -> bool {
+    true
+}
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self {
+            type_: "none".into(),
+            host: String::new(),
+            port: 0,
+            username: String::new(),
+            password: String::new(),
+            proxy_media: true,
+        }
+    }
+}
+impl ProxyConfig {
+    pub fn is_enabled(&self) -> bool {
+        self.type_ != "none" && !self.host.trim().is_empty() && self.port > 0
+    }
+    fn is_http(&self) -> bool {
+        self.type_ == "http" || self.type_ == "https"
+    }
+    /// reqwest/mpv 用的代理 URL(如 socks5://user:pass@host:port);未启用返回 None。
+    pub fn proxy_url(&self) -> Option<String> {
+        if !self.is_enabled() {
+            return None;
+        }
+        let scheme = match self.type_.as_str() {
+            "http" | "https" => "http",
+            "socks5" => "socks5",
+            "socks4" => "socks4a",
+            _ => return None,
+        };
+        let auth = if self.username.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "{}:{}@",
+                urlencoding::encode(&self.username),
+                urlencoding::encode(&self.password)
+            )
+        };
+        Some(format!("{scheme}://{auth}{}:{}", self.host, self.port))
+    }
+    /// mpv http-proxy 值(仅 HTTP 系列 + 开启 proxy_media)。
+    pub fn mpv_http_proxy(&self) -> Option<String> {
+        if self.is_enabled() && self.is_http() && self.proxy_media {
+            self.proxy_url()
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Default)]
 pub struct AppConfig {
     /// 每安装稳定不变的设备 ID(Emby DeviceId 用,影响会话/上报归属)。
@@ -46,6 +117,8 @@ pub struct AppConfig {
     pub prefs: Prefs,
     #[serde(default)]
     pub danmaku: DanmakuServer,
+    #[serde(default)]
+    pub proxy: ProxyConfig,
 }
 
 fn config_path() -> PathBuf {
@@ -105,5 +178,28 @@ impl AppConfig {
                 self.active = Some(self.accounts.len() - 1);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proxy_url_builds_scheme_and_auth() {
+        let mut p = ProxyConfig { type_: "socks5".into(), host: "h".into(), port: 1080, ..Default::default() };
+        assert_eq!(p.proxy_url().as_deref(), Some("socks5://h:1080"));
+        p.username = "u".into();
+        p.password = "p@ss".into();
+        assert_eq!(p.proxy_url().as_deref(), Some("socks5://u:p%40ss@h:1080"));
+        // socks 不给 mpv;http 系列才给。
+        assert!(p.mpv_http_proxy().is_none());
+        let h = ProxyConfig { type_: "http".into(), host: "h".into(), port: 8080, proxy_media: true, ..Default::default() };
+        assert_eq!(h.mpv_http_proxy().as_deref(), Some("http://h:8080"));
+        // 关闭 proxy_media → 不给 mpv。
+        let h2 = ProxyConfig { proxy_media: false, ..h.clone() };
+        assert!(h2.mpv_http_proxy().is_none());
+        // 未启用 → None。
+        assert!(ProxyConfig::default().proxy_url().is_none());
     }
 }

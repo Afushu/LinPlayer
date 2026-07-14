@@ -237,6 +237,11 @@ impl Player {
         out
     }
 
+    /// 设置/清除 mpv HTTP 代理(media 走代理时用;空串=直连)。SOCKS 不被 mpv 支持,只传 http://。
+    pub fn set_http_proxy(&self, proxy: Option<&str>) {
+        self.set_str("http-proxy", proxy.unwrap_or(""));
+    }
+
     /// 带续播起点加载:用 mpv 的 `start` 选项(下一次 loadfile 生效),避免 seek 早于解码就绪失败。
     pub fn load_at(&self, url: &str, start_secs: f64) -> Result<(), String> {
         self.set_str(

@@ -35,6 +35,8 @@ struct AppState {
     prefetch: Mutex<Option<linplayer_core::net::prefetch::ProxyHandle>>,
     // CF 优选:本地钉 IP 反代句柄;Drop 即停服。None=不走反代。
     cf_proxy: Mutex<Option<linplayer_core::net::cf::CfProxyHandle>>,
+    // 多线程下载管理器(长驻,持久化索引)。
+    download: linplayer_core::download::DownloadManager,
 }
 
 fn poclog(msg: &str) {
@@ -267,6 +269,9 @@ async fn play(
             "播放器未就绪".to_string()
         })?;
         let _ = p.take_error_eof();
+        // media 代理:仅 HTTP 系列 + 开启 proxyMedia 时给 mpv 挂 http-proxy(SOCKS mpv 不支持)。
+        let mpv_proxy = state.config.lock().unwrap().proxy.mpv_http_proxy();
+        p.set_http_proxy(mpv_proxy.as_deref());
         p.load_at(&play_url, resume_secs)?;
         p.set_pause(false);
     }
@@ -705,9 +710,81 @@ fn cf_proxy_stop(state: State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+// ---------- 多线程下载命令 ----------
+/// 入队下载:走 Emby /Items/{id}/Download(服务端按下载权限放行),返回任务 id。
+#[tauri::command]
+fn download_enqueue(
+    state: State<'_, AppState>,
+    item_id: String,
+    type_: String,
+    title: String,
+    container: String,
+    poster_url: Option<String>,
+) -> Result<String, String> {
+    let s = session_of(&state)?;
+    let url = format!(
+        "{}/Items/{}/Download?api_key={}",
+        s.server.trim_end_matches('/'),
+        item_id,
+        s.token
+    );
+    let c = if container.trim().is_empty() { "mkv".into() } else { container };
+    let item =
+        linplayer_core::download::DownloadItem::new(item_id, type_, title, c, url, poster_url);
+    Ok(state.download.enqueue(item))
+}
+
+#[tauri::command]
+fn download_list(
+    state: State<'_, AppState>,
+) -> Vec<linplayer_core::download::DownloadItem> {
+    state.download.list()
+}
+
+#[tauri::command]
+fn download_pause(state: State<'_, AppState>, id: String) {
+    state.download.pause(&id);
+}
+
+#[tauri::command]
+fn download_resume(state: State<'_, AppState>, id: String) {
+    state.download.resume(&id);
+}
+
+#[tauri::command]
+fn download_remove(state: State<'_, AppState>, id: String) {
+    state.download.remove(&id);
+}
+
+#[tauri::command]
+fn download_set_threads(state: State<'_, AppState>, threads: usize) {
+    state.download.set_threads(threads);
+}
+
+// ---------- 自定义代理命令 ----------
+#[tauri::command]
+fn get_proxy(state: State<'_, AppState>) -> linplayer_core::ProxyConfig {
+    state.config.lock().unwrap().proxy.clone()
+}
+
+/// 保存代理配置并即时生效(新建的 HTTP 客户端全部带上;主 Emby 客户端下次重启完全生效)。
+/// ponytail: state.http 是启动期单例,live 切换只覆盖新建客户端;彻底 live-rebuild 留待需要时。
+#[tauri::command]
+fn set_proxy(state: State<'_, AppState>, config: linplayer_core::ProxyConfig) -> Result<(), String> {
+    http::set_proxy(config.proxy_url());
+    {
+        let mut cfg = state.config.lock().unwrap();
+        cfg.proxy = config;
+        cfg.save();
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config = AppConfig::load();
+    // 先把代理写进全局,再建各 HTTP 客户端(含 Emby 主客户端/下载),使其启动即带代理。
+    http::set_proxy(config.proxy.proxy_url());
     let http = http::client();
 
     // 源后端注册表(长驻,持各自 token 缓存)。逐 Phase 增量接入更多源。
@@ -724,6 +801,15 @@ pub fn run() {
         user_id: a.user_id.clone(),
         device_id: config.device_id.clone(),
     });
+
+    // 下载目录:桌面便携场景放 exe 同级 downloads/。
+    let download_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("downloads")))
+        .unwrap_or_else(|| std::env::temp_dir().join("linplayer-downloads"));
+    let download = tauri::async_runtime::block_on(
+        linplayer_core::download::DownloadManager::new(download_dir),
+    );
 
     // 清旧诊断日志
     let _ = std::fs::remove_file(std::env::temp_dir().join("linplayer_poc.log"));
@@ -743,6 +829,7 @@ pub fn run() {
             resign_count: AtomicU32::new(0),
             prefetch: Mutex::new(None),
             cf_proxy: Mutex::new(None),
+            download,
         })
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window");
@@ -814,7 +901,15 @@ pub fn run() {
             cf_speed_test,
             cf_proxy_start,
             cf_proxy_update_ip,
-            cf_proxy_stop
+            cf_proxy_stop,
+            download_enqueue,
+            download_list,
+            download_pause,
+            download_resume,
+            download_remove,
+            download_set_threads,
+            get_proxy,
+            set_proxy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
